@@ -1,0 +1,68 @@
+[
+  {
+    "id": "2d-drawing",
+    "title": "2D Drawing",
+    "description": "Precise drafting for plans, sections, and coordination.",
+    "details": [
+      "AutoCAD and Archicad production workflows",
+      "Detailing sets with consistent annotation",
+      "Lineweight, scale, and layout standards"
+    ],
+    "image": "/images/pfe_plan.png"
+  },
+  {
+    "id": "3d-modeling",
+    "title": "3D Modeling",
+    "description": "Clean geometry for iterative design and visualization.",
+    "details": [
+      "3ds Max + Blender modeling pipelines",
+      "Efficient topology and scene organization",
+      "Rapid ideation with reusable assets"
+    ],
+    "image": null
+  },
+  {
+    "id": "rendering",
+    "title": "3D Rendering",
+    "description": "Lighting and material setups that sell the story.",
+    "details": [
+      "Lumion, Blender, and post-production workflows",
+      "Atmosphere, depth, and mood control",
+      "Shot framing for spatial clarity"
+    ],
+    "image": null
+  },
+  {
+    "id": "parametric-design",
+    "title": "Parametric Design",
+    "description": "Rule-based systems for form exploration.",
+    "details": [
+      "Rhino + Grasshopper workflows",
+      "Blender Geometry Nodes setups",
+      "Patterning, optimization, and iteration"
+    ],
+    "image": null
+  },
+  {
+    "id": "software-development",
+    "title": "Software Development",
+    "description": "Custom tooling for automation and productivity.",
+    "details": [
+      "Plugin development with Python",
+      "Data-driven workflows and automation",
+      "Version control with Git"
+    ],
+    "image": null
+  },
+  {
+    "id": "webgl",
+    "title": "WebGL Experiences",
+    "description": "Real-time interactive 3D on the web.",
+    "details": [
+      "Three.js pipelines for product and portfolio",
+      "React + TypeScript front-end tooling",
+      "Performance-focused asset delivery"
+    ],
+    "image": null
+  }
+]

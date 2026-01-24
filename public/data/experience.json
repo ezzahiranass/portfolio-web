@@ -1,0 +1,87 @@
+    
+    [{
+        "role": "Data System Engineer",
+        "organization": "JESA S.A.",
+        "period": "Feb 2025 – Present",
+        "responsibilities": [
+            "Parametric Modeling Framework Development",
+            "Autodesk APS & ACC Integration",
+            "3D & 2D CAD Design Automation"
+        ]
+    },
+    {
+        "role": "3D Software Developer",
+        "type": "Independent",
+        "period": "Jan 2022 – Present",
+        "organization": "Independent",
+        "responsibilities": [
+            "Plugin Development & Automation Agency",
+            "Software Development Services"
+        ]
+    },
+    {
+        "role": "Junior Architect",
+        "organization": "ZADA Architecture",
+        "period": "Nov 2021 – Mar 2022",
+        "responsibilities": [
+            "3D Modeling & Rendering",
+            "2D Drawings",
+            "Project Documentation",
+            "Conceptualization"
+        ]
+    },
+    {
+        "role": "Intern",
+        "organization": "Engineering Agency: Stroydom Ingénierie",
+        "period": "Jun 2021",
+        "responsibilities": [
+            "2D Drawings",
+            "3D Modeling",
+            "Project Documentation"
+        ]
+    },
+    {
+        "role": "Intern",
+        "organization": "Agence Urbaine Sekhirate–Temara",
+        "period": "Jan 2021 – Feb 2021",
+        "responsibilities": [
+            "Geographic Information System",
+            "Administrative Procedures"
+        ]
+    },
+    {
+        "role": "2D & 3D Graphic Designer",
+        "organization": "Fiability Conseil",
+        "period": "Sep 2019 – Mar 2020",
+        "responsibilities": [
+            "3D Visualization & Animation",
+            "Branding: Logo & Flyer Design"
+        ]
+    },
+    {
+        "role": "Intern",
+        "organization": "Architecture Agency: AtConcept",
+        "period": "Jul 2019 – Aug 2019",
+        "responsibilities": [
+            "3D Modeling",
+            "Interior Design"
+        ]
+    },
+    {
+        "role": "Intern",
+        "organization": "Architecture Agency: Oulhaj Said",
+        "period": "Feb 2019",
+        "responsibilities": [
+            "2D Drawing",
+            "Project Documentation"
+        ]
+    },
+    {
+        "role": "Intern",
+        "organization": "Construction Site: Yousra Li Tajhiz",
+        "period": "Jun 2018 – Jul 2018",
+        "responsibilities": [
+            "Construction Site Apprentice"
+        ]
+    }
+    ]

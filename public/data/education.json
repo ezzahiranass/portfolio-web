@@ -1,0 +1,31 @@
+[
+    {
+        "degree": "PhD Student",
+        "period": "Jan 2024 – Present",
+        "institution": "Institut National de Statistique et d’Économie Appliquée (INSEA)",
+        "location": "Rabat, Morocco",
+        "details": [
+            "Researching Applications of Artificial Intelligence in Architectural Design",
+            "Supervised by Pr. Benelallam Imade & Pr. Erraj Zakarya"
+        ]
+    },
+    {
+        "degree": "Architect",
+        "period": "Sep 2016 – Jun 2023",
+        "institution": "École Nationale d’Architecture de Rabat (ENAR)",
+        "location": "Rabat, Morocco",
+        "details": [
+            "Final Year Project Dissertation: 'Vers une Synergie Campus–Ville: Cas de la Zone de Jonction Technopolis–Salé Al Jadida'"
+        ]
+    },
+    {
+        "degree": "Baccalaureate",
+        "period": "Jun 2016",
+        "institution": "Complexe Scolaire Khalil Abdelhadi",
+        "location": "Salé Al Jadida, Morocco",
+        "details": [
+            "Scientific Track: Physical Sciences",
+            "Honors: Mention Très Bien"
+        ]
+    }
+]
