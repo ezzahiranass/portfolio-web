@@ -20,7 +20,7 @@ export const modelCDefaults: ParamValues = {
   balcony_window_type: 'Big',
   stripHeight: 0.08,
   stripSpacing: 0.15,
-  setback: 4.5,
+  setback: 0,
   balconyWall_0: true,
   balconyWall_1: true,
   balconyWall_2: true,

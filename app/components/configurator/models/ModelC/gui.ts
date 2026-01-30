@@ -41,7 +41,7 @@ export function buildModelCGui(
   const groundHeightCtrl = controls.add(state, 'groundFloorHeight', 2, 8, 0.1).name('Ground Floor Height');
   const roofHeightCtrl = controls.add(state, 'roofHeight', 0.5, 6, 0.1).name('Roof Height');
   const overhangCtrl = controls.add(state, 'overhang', 0, 3, 0.1).name('Overhang');
-  const setbackCtrl = controls.add(state, 'setback', 0, 10, 0.1).name('Road Setback');
+  const setbackCtrl = controls.add(state, 'setback', 0, 1, 0.1).name('Road Setback');
   const roofWallHeightCtrl = controls.add(state, 'roofWallHeight', 0.2, 2.5, 0.1).name('Roof Wall Height');
   const slabCtrl = controls.add(state, 'slabThickness', 0.05, 0.5, 0.05).name('Slab Thickness');
   const windowWidthCtrl = controls.add(state, 'windowWidth', 0.5, 3, 0.1).name('Window Width');
@@ -57,9 +57,10 @@ export function buildModelCGui(
     + state.roofHeight
   );
   const sizeX = 17.5;
-  const sizeZ = 13.1;
+  const sizeZBase = 13.1;
   const computeStats = () => {
     state.floorsCount = state.floors;
+    const sizeZ = Math.max(sizeZBase * (1 - state.setback / 3), 0.1);
     state.groundSurface = Number((sizeX * sizeZ).toFixed(2));
     state.floorSurface = Number((sizeX * (sizeZ + state.overhang)).toFixed(2));
     state.totalSurface = Number(

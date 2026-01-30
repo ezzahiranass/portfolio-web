@@ -222,7 +222,13 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
     + typed.floors * typed.floorHeight
     + slabCount * typed.slabThickness;
   const totalHeight = baseHeight + typed.roofHeight;
-  const sizeZ = 13.1;
+  const sizeZBase = 13.1;
+  const sizeZ = Math.max(sizeZBase * (1 - typed.setback / 3), 0.1);
+  const sizeZDeduction = sizeZBase - sizeZ;
+  const setbackEffective = Math.min(Math.max(typed.setback + sizeZDeduction, 1), 4.5) +1.25;
+  const zOffset = sizeZDeduction / 2;
+  const zOffsetX = Math.sin(rotationY) * zOffset;
+  const zOffsetZ = Math.cos(rotationY) * zOffset;
   const overhangLength = typed.overhang;
   const overhangZ = -sizeZ / 2 - overhangLength / 2;
   const coatingThickness = 0.1;
@@ -278,18 +284,18 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
     const placements: Array<{ key: string; position: [number, number, number] }> = [];
     const baseZ =-1.2 - sizeZ / 2;
     const spacingZ = 2.3;
-    const rows = Math.max(1, Math.min(4, Math.floor(typed.setback / spacingZ) + 1));
+    const rows = Math.max(1, Math.min(4, Math.floor(setbackEffective / spacingZ) + 1));
     for (let i = 0; i < rows; i += 1) {
       const z = baseZ - i * spacingZ;
       placements.push({ key: `pot-left-${i}`, position: [potXLeft, 0, z] });
       placements.push({ key: `pot-right-${i}`, position: [potXRight, 0, z] });
     }
     return placements;
-  }, [potXLeft, potXRight, sizeZ, typed.setback]);
+  }, [potXLeft, potXRight, sizeZ, setbackEffective]);
   const lastPotPlacements = useMemo(() => {
     const baseZ = -1.2 - sizeZ / 2;
     const spacingZ = 2.3;
-    const rows = Math.max(1, Math.min(4, Math.floor(typed.setback / spacingZ) + 1));
+    const rows = Math.max(1, Math.min(4, Math.floor(setbackEffective / spacingZ) + 1));
     const lastZ = baseZ - rows * spacingZ +0.8;
     return [
       { key: 'last-pot-left', position: [potXLeft-0.9, 0, lastZ] as [number, number, number] },
@@ -299,13 +305,13 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
       // { key: 'last-pot-left-3', position: [potXLeft-0.9-2.2-2.2, 0, lastZ] as [number, number, number] },
       // { key: 'last-pot-right-3', position: [potXRight+0.9+2.2+2.2, 0, lastZ] as [number, number, number] },
     ];
-  }, [potXLeft, potXRight, sizeZ, typed.setback]);
+  }, [potXLeft, potXRight, sizeZ, setbackEffective]);
   const tablePlacements = useMemo(() => {
     const placements: Array<{ key: string; position: [number, number, number] }> = [];
     const xMin = 2-sizeX / 2;
     const xMax = -5.5+sizeX / 2;
     const zMax = -1.5-sizeZ / 2;
-    const zMin = -sizeZ / 2 - typed.setback;
+    const zMin = -sizeZ / 2 - setbackEffective;
     const tableSpacingZ = 2.0;
     const zSpan = Math.max(zMax - zMin, 0);
     const cols = Math.max(2, Math.min(4, Math.floor(zSpan / tableSpacingZ) + 1));
@@ -328,7 +334,7 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
       }
     }
     return placements;
-  }, [sizeX, sizeZ, typed.setback]);
+  }, [sizeX, sizeZ, setbackEffective]);
   const humanPlacements = useMemo(() => {
     if (typed.overhang < 0.4) return [];
     const placements: Array<HumanModelProps & { key: string }> = [];
@@ -456,6 +462,7 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
   return (
     <>
       <primitive object={scene} position={[0, -0.45, 0]} />
+      <group position={[zOffsetX, 0, zOffsetZ]}>
       <GroundAsset
         src="/assets/door1.glb"
         position={[frontDoorX, 0, -sizeZ / 2]}
@@ -484,7 +491,7 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
         position={[garageDoorX2, awningY-1.7, -sizeZ / 2]}
         rotationY={rotationY}
         materialTone="black"
-        localScale={[1, 1, Math.max(typed.setback, 0.1)]}
+        localScale={[1, 1, setbackEffective]}
         rotateInPlace
       />
       {plantPotPlacements.map((pot) => (
@@ -907,6 +914,7 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
           scale={human.scale}
         />
       ))}
+      </group>
     </>
   );
 }
