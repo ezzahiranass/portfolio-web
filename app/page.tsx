@@ -8,6 +8,7 @@ import ConfiguratorSection from "./components/configurator/ConfiguratorSection";
 import Image from "next/image";
 import CutoutHero from "./components/landing/CutoutHero";
 import { assetPath } from "@/app/lib/assetPath";
+import PortfolioViewer from "./components/portfolio/PortfolioViewer";
 
 export default function Home() {
   return (
@@ -106,32 +107,12 @@ export default function Home() {
         <section className="w-full bg-[var(--surface)]">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-16">
             <div className="text-3xl font-black uppercase tracking-tight">
-              Portfolio Chapters
+              Portfolio Viewer
             </div>
-            <div className="grid gap-6 md:grid-cols-3">
-              {[
-                { label: "Chapter 01", href: "/portfolio/chapter-01" },
-                { label: "Chapter 02", href: "/portfolio/chapter-02" },
-                { label: "Chapter 03", href: "/portfolio/chapter-03" },
-              ].map((chapter) => (
-                <a
-                  key={chapter.label}
-                  href={chapter.href}
-                  className="group rounded-3xl border border-[var(--border)] bg-[var(--background)] p-6"
-                >
-                  <div className="h-40 rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] text-[var(--foreground)]">
-                    <div className="flex h-full items-center justify-center text-sm font-bold uppercase text-[var(--muted)]">
-                      Thumbnail
-                    </div>
-                  </div>
-                  <div className="mt-4 text-xl font-semibold">
-                    {chapter.label}
-                  </div>
-                  <div className="text-sm text-[var(--muted)]">
-                    Click to view work.
-                  </div>
-                </a>
-              ))}
+            <div className="rounded-3xl border border-[var(--border)] bg-[var(--background)] p-4 md:p-6">
+              <div className="h-[520px] w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)]">
+                <PortfolioViewer className="h-full w-full" />
+              </div>
             </div>
           </div>
         </section>

@@ -1,17 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import BookViewer from './components/BookViewer';
-import AnimationControls from './components/AnimationControls';
+import PortfolioViewer from '@/app/components/portfolio/PortfolioViewer';
 
 export default function Home() {
-  const [playAction, setPlayAction] = useState<((actionName: string) => void) | null>(null);
-
-  const handlePlayActionReady = (playActionFn: (actionName: string) => void) => {
-    setPlayAction(() => playActionFn);
-  };
-
   return (
     <div className="h-screen w-screen overflow-hidden relative">
       <div className="absolute top-4 left-4 z-50">
@@ -36,7 +28,7 @@ export default function Home() {
         </a>
       </div>
       <div className="w-full h-full">
-        <BookViewer onPlayActionReady={handlePlayActionReady} />
+        <PortfolioViewer className="h-full w-full" />
       </div>
     </div>
   );

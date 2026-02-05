@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, Suspense, useState } from 'react';
+import { useRef, useEffect, Suspense, useState, useCallback } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, useFBX } from '@react-three/drei';
 import * as THREE from 'three';
@@ -622,7 +622,7 @@ function BookModel({
   return <primitive object={fbx} />;
 }
 
-function CameraController() {
+function CameraController({ resetKey }: { resetKey: number }) {
   const { camera } = useThree();
   
   useEffect(() => {
@@ -636,14 +636,14 @@ function CameraController() {
       camera.fov = 25; // Lower FOV (default is 50) makes it more orthographic-like
       camera.updateProjectionMatrix();
     }
-  }, [camera]);
+  }, [camera, resetKey]);
 
   // Note: Removed forced top view constraint for debugging (rotation enabled)
 
   return null;
 }
 
-function LimitedOrbitControls() {
+function LimitedOrbitControls({ resetKey }: { resetKey: number }) {
   const controlsRef = useRef<any>(null);
   
   useEffect(() => {
@@ -656,17 +656,30 @@ function LimitedOrbitControls() {
       };
     }
   }, []);
+
+  useEffect(() => {
+    if (controlsRef.current) {
+      controlsRef.current.target.set(0, 0, 0);
+      controlsRef.current.update();
+      controlsRef.current.saveState();
+      controlsRef.current.reset();
+    }
+  }, [resetKey]);
   
   return <OrbitControls ref={controlsRef} makeDefault />;
 }
 
 export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (playAction: (actionName: string) => void) => void }) {
-  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [currentPageIndex, setCurrentPageIndex] = useState(1);
   const [maxPageIndex, setMaxPageIndex] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [pageMaterialsReady, setPageMaterialsReady] = useState(false);
-  const [bookState, setBookState] = useState<BookState>('closed-right'); // Start with book closed right
+  const [bookState, setBookState] = useState<BookState>('open'); // Start open at page 3
+  const [resetKey, setResetKey] = useState(0);
+  const [showSummary, setShowSummary] = useState(true);
   const playActionRef = useRef<((actionName: string) => void) | null>(null);
   const hasInitializedRef = useRef(false);
+  const viewerRef = useRef<HTMLDivElement | null>(null);
   
   const handleBookStateChange = (state: BookState) => {
     setBookState(state);
@@ -676,12 +689,13 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
     playActionRef.current = playAction;
     onPlayActionReady(playAction);
     
-    // Trigger close right on initial load
+    // Open book on initial load at page 3 (index 1)
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
       // Small delay to ensure book model is ready
       setTimeout(() => {
-        playAction('Close Book State Right');
+        setCurrentPageIndex(1);
+        playAction('Open Book State');
       }, 100);
     }
   };
@@ -689,44 +703,41 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
   const handlePageMaterialsReady = (materials: { leftPage: THREE.Material | null; rightPage: THREE.Material | null }) => {
     if (materials.leftPage && materials.rightPage) {
       setPageMaterialsReady(true);
-      // Check if pages exist - just validate 1.png and 2.png exist
+      // Discover how many pages exist (assumes sequential numbering).
       const checkMaxPages = async () => {
-        const textureLoader = new THREE.TextureLoader();
-        
-        const tryLoad = (pageNum: number): Promise<boolean> => {
-          return new Promise((resolve) => {
-            textureLoader.load(
-              publicPath(`/pdf-pages/${pageNum}.png`),
-              () => resolve(true),
-              undefined,
-              () => {
-                // Try uppercase
-                textureLoader.load(
-                  publicPath(`/pdf-pages/${pageNum}.PNG`),
-                  () => resolve(true),
-                  undefined,
-                  () => resolve(false)
-                );
-              }
-            );
-          });
+        const pageExists = async (pageNum: number): Promise<boolean> => {
+          const candidates = [
+            publicPath(`/pdf-pages/${pageNum}.png`),
+            publicPath(`/pdf-pages/${pageNum}.PNG`)
+          ];
+          for (const url of candidates) {
+            try {
+              const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+              if (res.ok) return true;
+            } catch {
+              // ignore and try next candidate
+            }
+          }
+          return false;
         };
-        
-        // Just check if 1.png and 2.png exist
-        const page1Exists = await tryLoad(1);
-        const page2Exists = await tryLoad(2);
-        
-        if (!page1Exists && !page2Exists) {
+
+        const maxCap = 200;
+        let lastFound = 0;
+        for (let pageNum = 1; pageNum <= maxCap; pageNum += 1) {
+          const exists = await pageExists(pageNum);
+          if (!exists) break;
+          lastFound = pageNum;
+        }
+
+        if (!lastFound) {
           console.warn('No page images found (1.png, 2.png)');
+          setTotalPages(0);
           setMaxPageIndex(0);
           return;
         }
-        
-        // If pages exist, set a high default maxIndex
-        // It will be corrected naturally when user navigates or when pages fail to load
-        // This prevents checking for non-existent pages like 49, 50, etc.
-        setMaxPageIndex(100); // High default, will be limited by actual page availability
-        console.log('Pages 1.png and 2.png found, maxIndex set to default (will be corrected on navigation)');
+
+        setTotalPages(lastFound);
+        setMaxPageIndex(Math.max(Math.ceil(lastFound / 2) - 1, 0));
       };
       checkMaxPages();
     }
@@ -772,11 +783,51 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
     }
   };
 
+  const handleSliderChange = (value: number) => {
+    if (bookState !== 'open' && playActionRef.current) {
+      playActionRef.current('Open Book State');
+    }
+    setCurrentPageIndex(value);
+  };
+
+  const handleJumpToPage = (pageIndex: number) => {
+    const clampedIndex = Math.min(Math.max(pageIndex, 0), maxPageIndex);
+    handleSliderChange(clampedIndex);
+  };
+
+  useEffect(() => {
+    if (!pageMaterialsReady) return;
+    setResetKey((prev) => prev + 1);
+  }, [currentPageIndex, pageMaterialsReady]);
+
+  const handleResetView = () => {
+    setResetKey((prev) => prev + 1);
+  };
+
+  const handleToggleFullscreen = useCallback(async () => {
+    const element = viewerRef.current;
+    if (!element) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await element.requestFullscreen();
+      }
+    } catch {
+      // Ignore fullscreen errors (e.g., not allowed without user gesture)
+    }
+  }, []);
+
+  const leftPage = totalPages ? currentPageIndex * 2 + 1 : 0;
+  const rightPage = totalPages
+    ? Math.min(currentPageIndex * 2 + 2, totalPages)
+    : 0;
+
   return (
-    <div className="w-full h-full relative">
+    <div ref={viewerRef} className="w-full h-full relative">
       <Canvas>
         <Suspense fallback={null}>
-          <CameraController />
+          <CameraController resetKey={resetKey} />
           {/* Reduced ambient light for less brightness */}
           <ambientLight intensity={0.8} />
           {/* Hemisphere light for natural lighting */}
@@ -793,28 +844,128 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
             onPageMaterialsReady={handlePageMaterialsReady}
             onBookStateChange={handleBookStateChange}
           />
-          <LimitedOrbitControls />
+          <LimitedOrbitControls resetKey={resetKey} />
         </Suspense>
       </Canvas>
       
       {/* Page Navigation Buttons */}
       {pageMaterialsReady && (
-        <div className="absolute bottom-4 right-4 z-50 flex gap-2">
+        <>
+          <div className="absolute left-4 top-4 z-50 flex items-center gap-2">
+            <button
+              aria-label="Toggle summary"
+              className="rounded-full border border-white/30 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:text-white"
+              onClick={() => setShowSummary((prev) => !prev)}
+              title="Toggle summary"
+              type="button"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 6h16" />
+                <path d="M4 12h16" />
+                <path d="M4 18h16" />
+              </svg>
+            </button>
+          </div>
+          {showSummary && (
+            <div className="absolute left-[76px] top-4 z-50 hidden w-[220px] flex-col gap-3 md:flex">
+              {[
+                { label: 'Chapter 01', pageIndex: 0 },
+                { label: 'Chapter 02', pageIndex: 1 },
+                { label: 'Chapter 03', pageIndex: 2 },
+                { label: 'Chapter 04', pageIndex: 3 },
+              ].map((chapter) => (
+                <button
+                  key={chapter.label}
+                  className="rounded-2xl border border-white/20 bg-white/10 px-4 py-4 text-left text-xs font-semibold uppercase tracking-widest text-black shadow-lg backdrop-blur-md opacity-80 transition-opacity hover:opacity-100 dark:border-white/10 dark:bg-black/10 dark:text-white"
+                  onClick={() => handleJumpToPage(chapter.pageIndex)}
+                  type="button"
+                >
+                  {chapter.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="absolute right-4 top-4 z-50 flex items-center gap-2">
+            <button
+              aria-label="Reset view"
+              className="rounded-full border border-white/30 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:text-white"
+              onClick={handleResetView}
+              title="Reset view"
+              type="button"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 12a9 9 0 1 0 3-6.7" />
+                <path d="M3 5v4h4" />
+              </svg>
+            </button>
+            <button
+              aria-label="Toggle fullscreen"
+              className="rounded-full border border-white/30 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:text-white"
+              onClick={handleToggleFullscreen}
+              title="Fullscreen"
+              type="button"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M8 3H3v5" />
+                <path d="M21 8V3h-5" />
+                <path d="M3 16v5h5" />
+                <path d="M16 21h5v-5" />
+              </svg>
+            </button>
+            <a
+              aria-label="Download PDF"
+              className="rounded-full border border-white/30 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:text-white"
+              download
+              href={publicPath('/Portfolio_EzzahirAnass_2024.pdf')}
+              title="Download PDF"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 3v10" />
+                <path d="M8 9l4 4 4-4" />
+                <path d="M5 21h14" />
+              </svg>
+            </a>
+          </div>
           <button
             onClick={handlePreviousPage}
             disabled={currentPageIndex === 0 && bookState === 'closed-right'}
-            className="backdrop-blur-md bg-white/20 dark:bg-black/20 border border-white/30 dark:border-white/20 rounded-lg px-4 py-2 text-sm font-medium text-black dark:text-white shadow-lg hover:bg-white/30 dark:hover:bg-black/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Previous page"
+            className="absolute left-4 top-1/2 z-50 -translate-y-1/2 rounded-full border border-white/30 bg-white/10 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/20 dark:bg-black/10 dark:text-white"
           >
-            Previous
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
           </button>
           <button
             onClick={handleNextPage}
             disabled={currentPageIndex >= maxPageIndex && bookState === 'closed-left'}
-            className="backdrop-blur-md bg-white/20 dark:bg-black/20 border border-white/30 dark:border-white/20 rounded-lg px-4 py-2 text-sm font-medium text-black dark:text-white shadow-lg hover:bg-white/30 dark:hover:bg-black/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Next page"
+            className="absolute right-4 top-1/2 z-50 -translate-y-1/2 rounded-full border border-white/30 bg-white/10 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/20 dark:bg-black/10 dark:text-white"
           >
-            Next
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
           </button>
-        </div>
+          <div className="absolute bottom-4 left-1/2 z-50 w-1/2 max-w-[520px] -translate-x-1/2 rounded-full border border-white/30 px-5 py-3 text-xs font-semibold text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:text-white">
+            <div className="flex items-center gap-3">
+              <div className="min-w-[56px] text-left">
+                {totalPages ? `${leftPage}-${rightPage}` : '0-0'}
+              </div>
+              <input
+                aria-label="Page slider"
+                className="range-modern w-full"
+                disabled={maxPageIndex === 0}
+                max={maxPageIndex}
+                min={0}
+                onChange={(event) => handleSliderChange(Number(event.target.value))}
+                step={1}
+                type="range"
+                value={currentPageIndex}
+              />
+              <div className="min-w-[28px] text-right">{totalPages || 0}</div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

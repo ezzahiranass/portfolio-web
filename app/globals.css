@@ -69,3 +69,42 @@ body {
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+.range-modern {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, currentColor 18%, transparent);
+  outline: none;
+}
+
+.range-modern:disabled {
+  opacity: 0.5;
+}
+
+.range-modern::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: currentColor;
+  border: 2px solid color-mix(in oklab, currentColor 60%, transparent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.range-modern::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: currentColor;
+  border: 2px solid color-mix(in oklab, currentColor 60%, transparent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.range-modern::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, currentColor 18%, transparent);
+}
