@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, Suspense, useState, useCallback } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, useFBX } from '@react-three/drei';
+import { Grid, OrbitControls, useFBX } from '@react-three/drei';
 import * as THREE from 'three';
 import { assetPath } from '@/app/lib/assetPath';
 
@@ -95,48 +95,30 @@ function BookModel({
         mesh: THREE.Mesh,
         index: number
       ) => {
-        if (material instanceof THREE.MeshPhongMaterial || 
-            material instanceof THREE.MeshStandardMaterial ||
-            material instanceof THREE.MeshBasicMaterial ||
-            material instanceof THREE.MeshLambertMaterial) {
-          
-          // Check if mesh has UVs
-          const hasUVs = mesh.geometry?.attributes?.uv !== undefined;
-          if (!hasUVs) {
-            console.error(`WARNING: Mesh "${mesh.name || 'unnamed'}" does not have UV coordinates! The texture will not display.`);
-          }
-          
-          // Assign texture and set color to slightly darker for reduced brightness and better contrast
-          (material as any).map = texture;
-          (material as any).color = new THREE.Color(0xcccccc); // Slightly darker than white for reduced brightness and better contrast
-          
-          // Reduce reflectivity by adjusting material properties
-          if (material instanceof THREE.MeshPhongMaterial) {
-            (material as any).shininess = 0; // No shininess for matte look
-            (material as any).specular = new THREE.Color(0x000000); // No specular highlights
-          } else if (material instanceof THREE.MeshStandardMaterial) {
-            (material as any).roughness = 1.0; // Maximum roughness (matte, no reflection)
-            (material as any).metalness = 0.0; // No metalness
-          }
-          
-          // Reduce emissive to prevent over-brightness
-          if ((material as any).emissive !== undefined) {
-            (material as any).emissive = new THREE.Color(0x000000);
-          }
-          
-          material.needsUpdate = true;
-          texture.needsUpdate = true;
-          
-          // Force mesh to update by cloning material array if needed
-          if (Array.isArray(mesh.material)) {
-            const newMaterials = [...mesh.material];
-            newMaterials[index] = material;
-            mesh.material = newMaterials;
-          }
-          
-          return true;
+        // Configure texture for crisp text.
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 8;
+        texture.magFilter = THREE.LinearFilter;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.generateMipmaps = true;
+        texture.needsUpdate = true;
+
+        const pageMat = new THREE.MeshBasicMaterial({
+          map: texture,
+          color: 0xffffff,
+          toneMapped: false,
+        });
+        pageMat.needsUpdate = true;
+
+        if (Array.isArray(mesh.material)) {
+          const newMaterials = [...mesh.material];
+          newMaterials[index] = pageMat;
+          mesh.material = newMaterials;
+        } else {
+          mesh.material = pageMat;
         }
-        return false;
+
+        return true;
       };
       
       // Function to load and assign page textures
@@ -291,6 +273,8 @@ function BookModel({
             leftPage: pageMaterialsRef.current.leftPage,
             rightPage: pageMaterialsRef.current.rightPage
           });
+          // Load the initial visible pages immediately (otherwise they are blank until pageIndex changes).
+          loadPageTextures(currentPageIndex);
           
           // Log which materials were found
           staticMaterialTextures.forEach(({ materialName }) => {
@@ -525,40 +509,30 @@ function BookModel({
       mesh: THREE.Mesh,
       index: number
     ) => {
-      if (material instanceof THREE.MeshPhongMaterial || 
-          material instanceof THREE.MeshStandardMaterial ||
-          material instanceof THREE.MeshBasicMaterial ||
-          material instanceof THREE.MeshLambertMaterial) {
-        
-        // Assign texture and set color to slightly darker for reduced brightness and better contrast
-        (material as any).map = texture;
-        (material as any).color = new THREE.Color(0xcccccc); // Slightly darker than white for reduced brightness and better contrast
-        
-        // Reduce reflectivity by adjusting material properties
-        if (material instanceof THREE.MeshPhongMaterial) {
-          (material as any).shininess = 0; // No shininess for matte look
-          (material as any).specular = new THREE.Color(0x000000); // No specular highlights
-        } else if (material instanceof THREE.MeshStandardMaterial) {
-          (material as any).roughness = 1.0; // Maximum roughness (matte, no reflection)
-          (material as any).metalness = 0.0; // No metalness
-        }
-        
-        // Reduce emissive to prevent over-brightness
-        if ((material as any).emissive !== undefined) {
-          (material as any).emissive = new THREE.Color(0x000000);
-        }
-        
-        material.needsUpdate = true;
-        texture.needsUpdate = true;
-        
-        if (Array.isArray(mesh.material)) {
-          const newMaterials = [...mesh.material];
-          newMaterials[index] = material;
-          mesh.material = newMaterials;
-        }
-        return true;
+      // Configure texture for crisp text.
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 8;
+      texture.magFilter = THREE.LinearFilter;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.generateMipmaps = true;
+      texture.needsUpdate = true;
+
+      const pageMat = new THREE.MeshBasicMaterial({
+        map: texture,
+        color: 0xffffff,
+        toneMapped: false,
+      });
+      pageMat.needsUpdate = true;
+
+      if (Array.isArray(mesh.material)) {
+        const newMaterials = [...mesh.material];
+        newMaterials[index] = pageMat;
+        mesh.material = newMaterials;
+      } else {
+        mesh.material = pageMat;
       }
-      return false;
+
+      return true;
     };
     
     const leftPageNum = currentPageIndex * 2 + 1;
@@ -643,16 +617,38 @@ function CameraController({ resetKey }: { resetKey: number }) {
   return null;
 }
 
-function LimitedOrbitControls({ resetKey }: { resetKey: number }) {
+function LimitedOrbitControls({
+  resetKey,
+  onDefaultChange,
+}: {
+  resetKey: number;
+  onDefaultChange: (isDefault: boolean) => void;
+}) {
   const controlsRef = useRef<any>(null);
+  const panBoundsRef = useRef({
+    minX: -7,
+    maxX: 7,
+    minY: -7,
+    maxY: 7,
+    minZ: -7,
+    maxZ: 7,
+  });
+  const defaultCameraPositionRef = useRef(new THREE.Vector3(0, 50, 0));
+  const defaultTargetRef = useRef(new THREE.Vector3(0, 0, 0));
+  const defaultDirectionRef = useRef(
+    new THREE.Spherical().setFromVector3(
+      defaultCameraPositionRef.current.clone().sub(defaultTargetRef.current)
+    )
+  );
+  const lastDefaultStateRef = useRef<boolean | null>(null);
   
   useEffect(() => {
     if (controlsRef.current) {
       // Set middle mouse to pan instead of dolly (zoom)
       controlsRef.current.mouseButtons = {
-        LEFT: THREE.MOUSE.ROTATE,
-        MIDDLE: THREE.MOUSE.PAN, // Middle mouse = pan
-        RIGHT: THREE.MOUSE.ROTATE,
+        LEFT: THREE.MOUSE.PAN,
+        MIDDLE: THREE.MOUSE.PAN,
+        RIGHT: -1 as unknown as THREE.MOUSE,
       };
     }
   }, []);
@@ -665,18 +661,59 @@ function LimitedOrbitControls({ resetKey }: { resetKey: number }) {
       controlsRef.current.reset();
     }
   }, [resetKey]);
+
+  useFrame(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+
+    const { minX, maxX, minY, maxY, minZ, maxZ } = panBoundsRef.current;
+    const target = controls.target;
+
+    const clampedX = Math.min(Math.max(target.x, minX), maxX);
+    const clampedY = Math.min(Math.max(target.y, minY), maxY);
+    const clampedZ = Math.min(Math.max(target.z, minZ), maxZ);
+
+    if (clampedX !== target.x || clampedY !== target.y || clampedZ !== target.z) {
+      const deltaX = clampedX - target.x;
+      const deltaY = clampedY - target.y;
+      const deltaZ = clampedZ - target.z;
+
+      target.set(clampedX, clampedY, clampedZ);
+      controls.object.position.x += deltaX;
+      controls.object.position.y += deltaY;
+      controls.object.position.z += deltaZ;
+      controls.update();
+    }
+
+    const position = controls.object.position as THREE.Vector3;
+    const targetDistance = target.distanceTo(defaultTargetRef.current);
+
+    const currentDirection = position.clone().sub(target);
+    const currentSpherical = new THREE.Spherical().setFromVector3(currentDirection);
+    const defaultSpherical = defaultDirectionRef.current;
+    const angleEpsilon = 0.002;
+    const thetaMatch = Math.abs(currentSpherical.theta - defaultSpherical.theta) < angleEpsilon;
+    const phiMatch = Math.abs(currentSpherical.phi - defaultSpherical.phi) < angleEpsilon;
+
+    const isDefault = targetDistance < 0.01 && thetaMatch && phiMatch;
+    if (lastDefaultStateRef.current !== isDefault) {
+      lastDefaultStateRef.current = isDefault;
+      onDefaultChange(isDefault);
+    }
+  });
   
-  return <OrbitControls ref={controlsRef} makeDefault />;
+  return <OrbitControls ref={controlsRef} makeDefault minDistance={15} maxDistance={50} />;
 }
 
 export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (playAction: (actionName: string) => void) => void }) {
-  const [currentPageIndex, setCurrentPageIndex] = useState(1);
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [maxPageIndex, setMaxPageIndex] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [pageMaterialsReady, setPageMaterialsReady] = useState(false);
-  const [bookState, setBookState] = useState<BookState>('open'); // Start open at page 3
+  const [bookState, setBookState] = useState<BookState>('open'); // Start open at page 1
   const [resetKey, setResetKey] = useState(0);
-  const [showSummary, setShowSummary] = useState(true);
+  const [showSummary, setShowSummary] = useState(false);
+  const [isCameraDefault, setIsCameraDefault] = useState(true);
   const playActionRef = useRef<((actionName: string) => void) | null>(null);
   const hasInitializedRef = useRef(false);
   const viewerRef = useRef<HTMLDivElement | null>(null);
@@ -689,12 +726,12 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
     playActionRef.current = playAction;
     onPlayActionReady(playAction);
     
-    // Open book on initial load at page 3 (index 1)
+    // Open book on initial load at page 1 (index 0)
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
       // Small delay to ensure book model is ready
       setTimeout(() => {
-        setCurrentPageIndex(1);
+        setCurrentPageIndex(0);
         playAction('Open Book State');
       }, 100);
     }
@@ -824,10 +861,25 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
     : 0;
 
   return (
-    <div ref={viewerRef} className="w-full h-full relative">
+    <div
+      ref={viewerRef}
+      className="w-full h-full relative"
+      onContextMenu={(event) => event.preventDefault()}
+      onMouseDown={(event) => {
+        if (event.button === 1 || event.button === 2) {
+          event.preventDefault();
+        }
+      }}
+      onAuxClick={(event) => {
+        if (event.button === 1 || event.button === 2) {
+          event.preventDefault();
+        }
+      }}
+    >
       <Canvas>
         <Suspense fallback={null}>
           <CameraController resetKey={resetKey} />
+          <fog attach="fog" args={['#d8d8d8', 60, 220]} />
           {/* Reduced ambient light for less brightness */}
           <ambientLight intensity={0.8} />
           {/* Hemisphere light for natural lighting */}
@@ -844,7 +896,19 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
             onPageMaterialsReady={handlePageMaterialsReady}
             onBookStateChange={handleBookStateChange}
           />
-          <LimitedOrbitControls resetKey={resetKey} />
+          <Grid
+            position={[0, -0.6, 0]}
+            args={[200, 200]}
+            cellSize={4}
+            cellThickness={0.25}
+            sectionSize={20}
+            sectionThickness={0.5}
+            cellColor="#e2e2e2"
+            sectionColor="#d4d4d4"
+            fadeDistance={140}
+            fadeStrength={1.6}
+          />
+          <LimitedOrbitControls resetKey={resetKey} onDefaultChange={setIsCameraDefault} />
         </Suspense>
       </Canvas>
       
@@ -866,6 +930,20 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
               </svg>
             </button>
           </div>
+          {!isCameraDefault && (
+            <button
+              aria-label="Reset view"
+              className="absolute bottom-4 right-4 z-50 rounded-full border border-white/30 bg-white/10 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:bg-black/10 dark:text-white"
+              onClick={handleResetView}
+              title="Reset view"
+              type="button"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 12a9 9 0 1 0 3-6.7" />
+                <path d="M3 5v4h4" />
+              </svg>
+            </button>
+          )}
           {showSummary && (
             <div className="absolute left-[76px] top-4 z-50 hidden w-[220px] flex-col gap-3 md:flex">
               {[
@@ -886,18 +964,6 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
             </div>
           )}
           <div className="absolute right-4 top-4 z-50 flex items-center gap-2">
-            <button
-              aria-label="Reset view"
-              className="rounded-full border border-white/30 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:text-white"
-              onClick={handleResetView}
-              title="Reset view"
-              type="button"
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 12a9 9 0 1 0 3-6.7" />
-                <path d="M3 5v4h4" />
-              </svg>
-            </button>
             <button
               aria-label="Toggle fullscreen"
               className="rounded-full border border-white/30 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:text-white"
