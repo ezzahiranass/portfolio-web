@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { assetPath } from '@/app/lib/assetPath';
 
 type WindowBigProps = {
   y: number;
@@ -21,7 +22,7 @@ export default function WindowBig({
   height,
   rotationY,
 }: WindowBigProps) {
-  const { scene } = useGLTF('/assets/window_big.glb');
+  const { scene } = useGLTF(assetPath('/assets/window_big.glb'));
   const { size, center } = useMemo(() => {
     const box = new THREE.Box3().setFromObject(scene);
     const boxSize = new THREE.Vector3();
@@ -44,4 +45,4 @@ export default function WindowBig({
   );
 }
 
-useGLTF.preload('/assets/window_big.glb');
+useGLTF.preload(assetPath('/assets/window_big.glb'));

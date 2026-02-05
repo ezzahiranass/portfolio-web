@@ -4,6 +4,7 @@ import { useGLTF } from '@react-three/drei';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import type { ParamValues } from '../../types';
+import { assetPath } from '@/app/lib/assetPath';
 import Roof from './parts/roof';
 import Floor from './parts/floor';
 import GroundFloor from './parts/groundFloor';
@@ -18,12 +19,12 @@ import WindowBig from './parts/windowBig';
 import WindowSmall from './parts/windowSmall';
 
 const MAN_MODELS = [
-  '/assets/man1.glb',
-  '/assets/man2.glb',
-  '/assets/man3.glb',
-  '/assets/man4.glb',
-  '/assets/man5.glb',
-  '/assets/man6.glb',
+  assetPath('/assets/man1.glb'),
+  assetPath('/assets/man2.glb'),
+  assetPath('/assets/man3.glb'),
+  assetPath('/assets/man4.glb'),
+  assetPath('/assets/man5.glb'),
+  assetPath('/assets/man6.glb'),
 ];
 
 type Params = ParamValues & {
@@ -212,7 +213,7 @@ function HumanModel({
 
 export function ModelCRenderer({ params }: { params: ParamValues }) {
   const typed = params as Params;
-  const { scene } = useGLTF('/assets/city_rabat.glb');
+  const { scene } = useGLTF(assetPath('/assets/city_rabat.glb'));
   const defaultMaterialColor = new THREE.Color('#3f3f3f');
   const wireframeColor = 0xcfcfcf;
   const rotationY = (typed.rotationY * Math.PI) / 180;
@@ -400,7 +401,7 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
   ]);
   useEffect(() => {
     const overlayGroup = new THREE.Group();
-    scene.traverse((child) => {
+    scene.traverse((child: any) => {
       if (!(child instanceof THREE.Mesh)) return;
       const material = child.material;
       const applyDefaultMaterial = (mat: THREE.Material) => {
@@ -440,7 +441,7 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
     scene.add(overlayGroup);
 
     return () => {
-      scene.traverse((child) => {
+      scene.traverse((child: any) => {
         if (!(child instanceof THREE.Mesh)) return;
         child.children
           .filter((node) => node.name === '__wireframe_overlay')
@@ -464,30 +465,30 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
       <primitive object={scene} position={[0, -0.45, 0]} />
       <group position={[zOffsetX, 0, zOffsetZ]}>
       <GroundAsset
-        src="/assets/door1.glb"
+        src={assetPath('/assets/door1.glb')}
         position={[frontDoorX, 0, -sizeZ / 2]}
         rotationY={rotationY}
       />
       <GroundAsset
-        src="/assets/garage_door.glb"
+        src={assetPath('/assets/garage_door.glb')}
         position={[garageDoorX1, 0, -sizeZ / 2]}
         rotationY={rotationY}
         scale={[1, garageDoorScaleY/2.5, 1]}
       />
       <GroundAsset
-        src="/assets/garage_door.glb"
+        src={assetPath('/assets/garage_door.glb')}
         position={[garageDoorX2, 0, -sizeZ / 2]}
         rotationY={rotationY}
         scale={[1, garageDoorScaleY/2.5, 1]}
       />
       <GroundAsset
-        src="/assets/garage_door.glb"
+        src={assetPath('/assets/garage_door.glb')}
         position={[garageDoorX3, 0, -sizeZ / 2]}
         rotationY={rotationY}
         scale={[1, garageDoorScaleY/2.5, 1]}
       />
       <GroundAsset
-        src="/assets/awning.glb"
+        src={assetPath('/assets/awning.glb')}
         position={[garageDoorX2, awningY-1.7, -sizeZ / 2]}
         rotationY={rotationY}
         materialTone="black"
@@ -497,7 +498,7 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
       {plantPotPlacements.map((pot) => (
         <GroundAsset
           key={pot.key}
-          src="/assets/plant_pot.glb"
+          src={assetPath('/assets/plant_pot.glb')}
           position={pot.position}
           rotationY={rotationY}
           materialTone="black"
@@ -506,7 +507,7 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
       {lastPotPlacements.map((pot) => (
         <GroundAsset
           key={pot.key}
-          src="/assets/plant_pot.glb"
+          src={assetPath('/assets/plant_pot.glb')}
           position={pot.position}
           rotationY={rotationY}
           localRotationY={Math.PI / 2}
@@ -517,7 +518,7 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
       {tablePlacements.map((table) => (
         <GroundAsset
           key={table.key}
-          src="/assets/table_4.glb"
+          src={assetPath('/assets/table_4.glb')}
           position={table.position}
           rotationY={rotationY}
           materialTone="black"
@@ -919,10 +920,10 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
   );
 }
 
-useGLTF.preload('/assets/city_rabat.glb');
-useGLTF.preload('/assets/door1.glb');
-useGLTF.preload('/assets/garage_door.glb');
-useGLTF.preload('/assets/awning.glb');
-useGLTF.preload('/assets/plant_pot.glb');
-useGLTF.preload('/assets/table_4.glb');
+useGLTF.preload(assetPath('/assets/city_rabat.glb'));
+useGLTF.preload(assetPath('/assets/door1.glb'));
+useGLTF.preload(assetPath('/assets/garage_door.glb'));
+useGLTF.preload(assetPath('/assets/awning.glb'));
+useGLTF.preload(assetPath('/assets/plant_pot.glb'));
+useGLTF.preload(assetPath('/assets/table_4.glb'));
 MAN_MODELS.forEach((model) => useGLTF.preload(model));

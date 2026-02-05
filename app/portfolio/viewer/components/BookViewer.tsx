@@ -4,8 +4,10 @@ import { useRef, useEffect, Suspense, useState } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, useFBX } from '@react-three/drei';
 import * as THREE from 'three';
+import { assetPath } from '@/app/lib/assetPath';
 
 type BookState = 'open' | 'closed-left' | 'closed-right' | null;
+const publicPath = assetPath;
 
 function BookModel({ 
   onActionsReady,
@@ -18,7 +20,7 @@ function BookModel({
   onPageMaterialsReady: (materials: { leftPage: THREE.Material | null; rightPage: THREE.Material | null }) => void;
   onBookStateChange: (state: BookState) => void;
 }) {
-  const fbx = useFBX('/assets/Book.fbx');
+  const fbx = useFBX(publicPath('/assets/Book.fbx'));
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const actionsRef = useRef<Map<string, THREE.AnimationAction>>(new Map());
   const currentActionRef = useRef<THREE.AnimationAction | null>(null);
@@ -62,8 +64,20 @@ function BookModel({
       // Define static material to texture mappings (cover and back)
       // Try pdf-pages first, then fall back to pages
       const staticMaterialTextures = [
-        { materialName: 'CoverMaterial', texturePath: '/pdf-pages/Cover.png', fallbackPaths: ['/pdf-pages/cover.png', '/pages/cover.png', '/pages/Cover.png'] },
-        { materialName: 'BackMaterial', texturePath: '/pdf-pages/back.png', fallbackPaths: ['/pages/back.png'] }
+        {
+          materialName: 'CoverMaterial',
+          texturePath: publicPath('/pdf-pages/Cover.png'),
+          fallbackPaths: [
+            publicPath('/pdf-pages/cover.png'),
+            publicPath('/pages/cover.png'),
+            publicPath('/pages/Cover.png')
+          ]
+        },
+        {
+          materialName: 'BackMaterial',
+          texturePath: publicPath('/pdf-pages/back.png'),
+          fallbackPaths: [publicPath('/pages/back.png')]
+        }
       ];
       
       // Helper function to configure texture
@@ -144,14 +158,14 @@ function BookModel({
                 () => {
                   // Try next path
                   if (path.endsWith('.png')) {
-                    tryPath(`/pdf-pages/${pageNum}.PNG`);
+                    tryPath(publicPath(`/pdf-pages/${pageNum}.PNG`));
                   } else {
                     resolve(null);
                   }
                 }
               );
             };
-            tryPath(`/pdf-pages/${pageNum}.png`);
+            tryPath(publicPath(`/pdf-pages/${pageNum}.png`));
           });
         };
         
@@ -562,14 +576,14 @@ function BookModel({
             undefined,
             () => {
               if (path.endsWith('.png')) {
-                tryPath(`/pdf-pages/${pageNum}.PNG`);
+                tryPath(publicPath(`/pdf-pages/${pageNum}.PNG`));
               } else {
                 resolve(null);
               }
             }
           );
         };
-        tryPath(`/pdf-pages/${pageNum}.png`);
+        tryPath(publicPath(`/pdf-pages/${pageNum}.png`));
       });
     };
     
@@ -682,13 +696,13 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
         const tryLoad = (pageNum: number): Promise<boolean> => {
           return new Promise((resolve) => {
             textureLoader.load(
-              `/pdf-pages/${pageNum}.png`,
+              publicPath(`/pdf-pages/${pageNum}.png`),
               () => resolve(true),
               undefined,
               () => {
                 // Try uppercase
                 textureLoader.load(
-                  `/pdf-pages/${pageNum}.PNG`,
+                  publicPath(`/pdf-pages/${pageNum}.PNG`),
                   () => resolve(true),
                   undefined,
                   () => resolve(false)
@@ -805,4 +819,3 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
     </div>
   );
 }
-

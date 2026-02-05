@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { assetPath } from '@/app/lib/assetPath';
 
 export default function CutoutHero() {
   const motionRef = useRef<HTMLDivElement | null>(null);
@@ -59,7 +60,7 @@ export default function CutoutHero() {
           className="pointer-events-none absolute inset-0 h-full w-full select-none opacity-100 group-hover:opacity-0"
           height={500}
           unoptimized
-          src="/images/cutout3.png"
+          src={assetPath('/images/cutout3.png')}
           width={500}
         />
         <Image
@@ -67,7 +68,7 @@ export default function CutoutHero() {
           className="pointer-events-none absolute inset-0 h-full w-full select-none opacity-0 group-hover:opacity-100"
           height={500}
           unoptimized
-          src="/images/cutout2.png"
+          src={assetPath('/images/cutout2.png')}
           width={500}
         />
       </div>

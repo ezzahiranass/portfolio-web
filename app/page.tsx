@@ -7,6 +7,7 @@ import ThemeToggle from "./components/theme/ThemeToggle";
 import ConfiguratorSection from "./components/configurator/ConfiguratorSection";
 import Image from "next/image";
 import CutoutHero from "./components/landing/CutoutHero";
+import { assetPath } from "@/app/lib/assetPath";
 
 export default function Home() {
   return (
@@ -54,7 +55,7 @@ export default function Home() {
             className="pointer-events-none absolute left-0 right-0 top-[var(--nav-height)] z-30 w-full select-none"
             height={120}
             unoptimized
-            src="/images/paper-border.png"
+            src={assetPath("/images/paper-border.png")}
             width={2400}
           />
           <div
@@ -154,17 +155,17 @@ export default function Home() {
                 {
                   title: "Urban Rhythm",
                   description: "Urban.gif — parametric facade animation study.",
-                  image: "/images/urban.gif",
+                  image: assetPath("/images/urban.gif"),
                 },
                 {
                   title: "Light Strips",
                   description: "Placeholder description for upcoming showcase.",
-                  image: "/images/placeholder.gif",
+                  image: assetPath("/images/placeholder.gif"),
                 },
                 {
                   title: "Material Flow",
                   description: "Placeholder description for upcoming showcase.",
-                  image: "/images/placeholder.gif",
+                  image: assetPath("/images/placeholder.gif"),
                 },
               ].map((item, index) => {
                 const isReversed = index === 1;
