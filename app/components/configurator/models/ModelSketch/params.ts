@@ -15,6 +15,7 @@ export const modelSketchDefaults: ParamValues = {
   columnRadius: 0.15,
   columnRingOffset: 0.6,
   showShell: true,
+  showSite: true,
   twist: 1,
   topInset: 0.7,
   bottomOffset: 0.1,

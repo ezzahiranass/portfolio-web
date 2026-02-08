@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import type { ParamValues } from '../../types';
+import { assetPath } from '@/app/lib/assetPath';
 
 type Mode = 'draw' | 'edit';
 
@@ -24,6 +26,7 @@ type Params = ParamValues & {
   columnRadius: number;
   columnRingOffset: number;
   showShell: boolean;
+  showSite: boolean;
   twist: number;
   topInset: number;
   bottomOffset: number;
@@ -123,6 +126,38 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
   });
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const { camera, size } = useThree();
+  const { scene: dubaiScene } = useGLTF(assetPath('/assets/dubai.glb'));
+  const dubaiClone = useMemo(() => dubaiScene.clone(true), [dubaiScene]);
+
+  useEffect(() => {
+    dubaiClone.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const mesh = child as THREE.Mesh;
+      const material = mesh.material;
+      const materials = Array.isArray(material) ? material : [material];
+      materials.forEach((mat) => {
+        if (!mat || typeof mat !== 'object') return;
+        const m = mat as THREE.MeshStandardMaterial;
+        m.color.set(0x000000);
+        m.transparent = true;
+        m.opacity = 0.5;
+        m.roughness = 0.7;
+        m.metalness = 0.05;
+        m.depthWrite = true;
+      });
+      if (mesh.geometry) {
+        const edgesGeom = new THREE.EdgesGeometry(mesh.geometry, 20);
+        const edgesMat = new THREE.LineBasicMaterial({
+          color: 0x333333,
+          transparent: false,
+        });
+        const lineSegments = new THREE.LineSegments(edgesGeom, edgesMat);
+        lineSegments.name = '__wireframe_overlay';
+        lineSegments.renderOrder = 1;
+        mesh.add(lineSegments);
+      }
+    });
+  }, [dubaiClone]);
 
   const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
   const floorHeight = Math.max(state.floorHeight ?? 0, 0);
@@ -605,8 +640,11 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
     };
   }, [tower, baseProfilePoints]);
 
+  const showSite = state.showSite ?? true;
+
   return (
     <group>
+      {showSite ? <primitive object={dubaiClone} position={[0, 0, 0]} scale={1} /> : null}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, 0, 0]}
@@ -725,3 +763,5 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
     </group>
   );
 }
+
+useGLTF.preload(assetPath('/assets/dubai.glb'));

@@ -187,18 +187,10 @@ export default function Home() {
               ThreeJS Parametric Configurator
             </div>
             <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8">
-              <ViewerIntroOverlay
-                title="Parametric Configurator"
-                description="Adjust geometry and material controls in real time to explore design variants."
-                buttonLabel="Open Configurator"
-              >
-                <div>
-                  <ConfiguratorSection />
-                  <div className="mt-4 text-sm text-[var(--muted)]">
-                    Controls, toggles, and parametric options go here.
-                  </div>
-                </div>
-              </ViewerIntroOverlay>
+              <ConfiguratorSection />
+              <div className="mt-4 text-sm text-[var(--muted)]">
+                Controls, toggles, and parametric options go here.
+              </div>
             </div>
           </div>
         </section>
@@ -246,6 +238,27 @@ export default function Home() {
             <p className="max-w-2xl text-lg font-medium text-[var(--muted)]">
               As an architect and self-taught software developer specializing in the intersection of design and technology, I create custom plugins, automations, and digital solutions for 3D software to streamline architectural Visualization and 3D design workflows. Passionate about leveraging cutting-edge technology to enhance conceptualization and elevate the design process. I aim to combine my architectural expertise with programming skills to drive efficiency and push creative boundaries in the field.
             </p>
+            <div className="flex flex-col gap-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.32em] text-[var(--muted)]">
+                Companies
+              </div>
+              <div className="flex flex-wrap items-center gap-6">
+                {[
+                  { name: "Difffuse", src: assetPath("/icons/companies/difffuse.jpg") },
+                  { name: "JESA Casavigilance", src: assetPath("/icons/companies/JESA-Casavigilance.webp") },
+                ].map((company) => (
+                  <Image
+                    key={company.name}
+                    alt={company.name}
+                    className="h-10 w-auto object-contain"
+                    height={40}
+                    unoptimized
+                    src={company.src}
+                    width={160}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
