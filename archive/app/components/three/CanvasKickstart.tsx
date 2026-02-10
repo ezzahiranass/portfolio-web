@@ -27,7 +27,7 @@ export default function CanvasKickstart() {
 
     const schedule = () => {
       if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(kick);
+      raf = requestAnimationFrame(() => kick(true));
     };
 
     const handleVisibility = () => {
@@ -42,6 +42,13 @@ export default function CanvasKickstart() {
     resizeObserver.observe(parent);
 
     schedule();
+
+    if ('ResizeObserver' in window) {
+      resizeObserver = new ResizeObserver(() => {
+        schedule();
+      });
+      resizeObserver.observe(gl.domElement);
+    }
 
     window.addEventListener('focus', schedule);
     window.addEventListener('resize', schedule);

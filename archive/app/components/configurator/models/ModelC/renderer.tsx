@@ -215,7 +215,7 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
   const typed = params as Params;
   const { scene } = useGLTF(assetPath('/assets/city_rabat.glb'));
   const defaultMaterialColor = new THREE.Color('#3f3f3f');
-  const wireframeColor = 0xcfcfcf;
+  const wireframeColor = 0x333333;
   const rotationY = (typed.rotationY * Math.PI) / 180;
   const sizeX = 17.5;
   const slabCount = typed.floors + 1;
@@ -409,6 +409,9 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
         if (colored.color) {
           colored.color.copy(defaultMaterialColor);
         }
+        colored.transparent = true;
+        colored.opacity = 0.5;
+        colored.depthWrite = false;
       };
       if (Array.isArray(material)) {
         material.forEach((mat) => {
@@ -428,8 +431,9 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
         const wireGeom = new THREE.EdgesGeometry(child.geometry, 30);
         const wireMat = new THREE.LineBasicMaterial({
           color: wireframeColor,
-          transparent: true,
-          opacity: 0.5,
+          polygonOffset: true,
+          polygonOffsetFactor: 2,
+          polygonOffsetUnits: 4,
         });
         const wireframe = new THREE.LineSegments(wireGeom, wireMat);
         wireframe.name = '__wireframe_overlay';

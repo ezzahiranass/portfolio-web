@@ -15,6 +15,7 @@ type Params = ParamValues & {
   columnRadius: number;
   columnRingOffset: number;
   showShell: boolean;
+  showSite: boolean;
   twist: number;
   topInset: number;
   bottomOffset: number;
@@ -31,6 +32,7 @@ export function buildModelSketchGui(
   };
 
   const drawCtrl = gui.add(drawAction, 'draw').name('Draw');
+  const siteCtrl = gui.add(state, 'showSite').name('Show Site');
   const typeCtrl = gui
     .add(state, 'towerType', ['Twist', 'Voxel', 'Shanghai'])
     .name('Tower Type');
@@ -108,6 +110,7 @@ export function buildModelSketchGui(
   };
 
   const sync = () => onChange({ ...state });
+  siteCtrl.onChange(sync);
   typeCtrl.onChange(sync);
   roundedCtrl.onChange(sync);
   bevelResCtrl.onChange(sync);

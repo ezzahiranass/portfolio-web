@@ -9,6 +9,11 @@ export type ParamValues = Record<string, ParamValue>;
 export type ModelDefinition = {
   id: string;
   name: string;
+  intro?: {
+    title: string;
+    description: string;
+    buttonLabel: string;
+  };
   defaults: ParamValues;
   camera?: {
     position: [number, number, number];
