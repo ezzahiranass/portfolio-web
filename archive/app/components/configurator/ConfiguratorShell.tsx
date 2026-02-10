@@ -1,6 +1,7 @@
 'use client';
 
-import { Canvas, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
+import ClientOnlyCanvas from '@/app/components/three/ClientOnlyCanvas';
 import { OrbitControls } from '@react-three/drei';
 import { useEffect, useRef, useState } from 'react';
 import GUI from 'lil-gui';
@@ -22,9 +23,9 @@ function ShiftMmbPan({ controlsRef }: { controlsRef: React.RefObject<any> }) {
 
     const setRotate = () => {
       controls.mouseButtons = {
-        LEFT: THREE.MOUSE.NONE,
+        LEFT: -1 as unknown as THREE.MOUSE,
         MIDDLE: THREE.MOUSE.ROTATE,
-        RIGHT: THREE.MOUSE.NONE,
+        RIGHT: -1 as unknown as THREE.MOUSE,
       };
     };
 
@@ -32,9 +33,9 @@ function ShiftMmbPan({ controlsRef }: { controlsRef: React.RefObject<any> }) {
       if (event.button !== 1) return;
       if (event.shiftKey) {
         controls.mouseButtons = {
-          LEFT: THREE.MOUSE.NONE,
+          LEFT: -1 as unknown as THREE.MOUSE,
           MIDDLE: THREE.MOUSE.PAN,
-          RIGHT: THREE.MOUSE.NONE,
+          RIGHT: -1 as unknown as THREE.MOUSE,
         };
       } else {
         setRotate();
@@ -133,7 +134,7 @@ export default function ConfiguratorShell({ model }: ConfiguratorShellProps) {
 
   return (
     <div
-      className="relative h-128 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)]"
+      className="relative h-[32rem] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)]"
       onContextMenu={(event) => event.preventDefault()}
       onMouseDown={(event) => {
         if (event.button === 1) {
@@ -151,7 +152,7 @@ export default function ConfiguratorShell({ model }: ConfiguratorShellProps) {
         ref={guiRef}
         className="absolute right-3 top-3 z-10 max-h-[calc(100%-24px)] overflow-auto"
       />
-      <Canvas
+      <ClientOnlyCanvas
         shadows
         camera={{
           position: cameraPosition,
@@ -187,13 +188,13 @@ export default function ConfiguratorShell({ model }: ConfiguratorShellProps) {
           enableRotate
           ref={controlsRef}
           mouseButtons={{
-            LEFT: THREE.MOUSE.NONE,
+            LEFT: -1 as unknown as THREE.MOUSE,
             MIDDLE: THREE.MOUSE.ROTATE,
-            RIGHT: THREE.MOUSE.NONE,
+            RIGHT: -1 as unknown as THREE.MOUSE,
           }}
           maxDistance={300}
         />
-      </Canvas>
+      </ClientOnlyCanvas>
     </div>
   );
 }

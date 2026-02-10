@@ -1,6 +1,6 @@
 'use client';
 
-import { Canvas } from '@react-three/fiber';
+import ClientOnlyCanvas from '@/app/components/three/ClientOnlyCanvas';
 import { OrbitControls } from '@react-three/drei';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
@@ -133,7 +133,7 @@ export default function ConfiguratorViewer() {
   return (
     <div className="relative h-64 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)]">
       <div ref={guiRef} className="absolute right-3 top-3 z-10" />
-      <Canvas shadows camera={{ position: [1, 1, 1], fov: 50 }}>
+      <ClientOnlyCanvas shadows camera={{ position: [1, 1, 1], fov: 50 }}>
         <CanvasKickstart />
         <color attach="background" args={['#f2f2f2']} />
         <ambientLight intensity={0.6} />
@@ -168,7 +168,7 @@ export default function ConfiguratorViewer() {
             RIGHT: -1 as unknown as THREE.MOUSE,
           }}
         />
-      </Canvas>
+      </ClientOnlyCanvas>
     </div>
   );
 }

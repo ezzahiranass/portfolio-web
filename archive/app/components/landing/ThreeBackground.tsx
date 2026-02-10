@@ -1,6 +1,7 @@
 'use client';
 
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
+import ClientOnlyCanvas from '@/app/components/three/ClientOnlyCanvas';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useTheme } from '../theme/ThemeProvider';
@@ -154,11 +155,11 @@ export default function ThreeBackground() {
 
   return (
     <div className="absolute inset-0">
-      <Canvas camera={{ position: [0, 0, 12], fov: 55 }} dpr={[1, 2]}>
+      <ClientOnlyCanvas camera={{ position: [0, 0, 12], fov: 55 }} dpr={[1, 2]}>
         <CanvasKickstart />
         <color attach="background" args={[colors.background]} />
         <ParticleField color={colors.points} />
-      </Canvas>
+      </ClientOnlyCanvas>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-full bg-[linear-gradient(to_top,_var(--background),_transparent)]" />
     </div>
   );

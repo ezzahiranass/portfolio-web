@@ -6,7 +6,6 @@ import { Grid, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { FBXLoader } from 'three-stdlib';
 import { assetPath } from '@/app/lib/assetPath';
-import CanvasKickstart from '@/app/components/three/CanvasKickstart';
 
 type BookState = 'open' | 'closed-left' | 'closed-right' | null;
 const publicPath = assetPath;
@@ -651,17 +650,6 @@ function LimitedOrbitControls({
   
   useEffect(() => {
     if (controlsRef.current) {
-      // Set middle mouse to pan instead of dolly (zoom)
-      controlsRef.current.mouseButtons = {
-        LEFT: THREE.MOUSE.PAN,
-        MIDDLE: THREE.MOUSE.PAN,
-        RIGHT: -1 as unknown as THREE.MOUSE,
-      };
-    }
-  }, []);
-
-  useEffect(() => {
-    if (controlsRef.current) {
       controlsRef.current.target.set(0, 0, 0);
       controlsRef.current.update();
       controlsRef.current.saveState();
@@ -709,7 +697,19 @@ function LimitedOrbitControls({
     }
   });
   
-  return <OrbitControls ref={controlsRef} makeDefault minDistance={15} maxDistance={50} />;
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      makeDefault
+      enablePan
+      enableZoom
+      enableRotate
+      minDistance={15}
+      maxDistance={50}
+      dampingFactor={0.08}
+      enableDamping
+    />
+  );
 }
 
 export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (playAction: (actionName: string) => void) => void }) {
@@ -875,7 +875,7 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
   return (
     <div
       ref={viewerRef}
-      className="w-full h-full relative"
+      className="book-viewer"
       onContextMenu={(event) => event.preventDefault()}
       onMouseDown={(event) => {
         if (event.button === 1 || event.button === 2) {
@@ -888,9 +888,8 @@ export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (
         }
       }}
     >
-      <Canvas>
+      <Canvas className="book-canvas" dpr={[1, 2]} camera={{ fov: 30 }}>
         <Suspense fallback={null}>
-          <CanvasKickstart />
           <CameraController resetKey={resetKey} />
           <fog attach="fog" args={['#d8d8d8', 60, 220]} />
           {/* Reduced ambient light for less brightness */}

@@ -1,6 +1,6 @@
-﻿"use client";
+'use client';
 
-import BookViewer from "./BookViewer";
+import BookViewer from '@/app/portfolio/viewer/components/BookViewer';
 
 type PortfolioViewerProps = {
   className?: string;
@@ -8,10 +8,11 @@ type PortfolioViewerProps = {
 };
 
 export default function PortfolioViewer({
-  className = "",
+  className = '',
   onPlayActionReady,
 }: PortfolioViewerProps) {
-  const handlePlayActionReady = onPlayActionReady ?? (() => {});
+  const handlePlayActionReady =
+    onPlayActionReady ?? (() => {});
 
   return (
     <div className={className}>

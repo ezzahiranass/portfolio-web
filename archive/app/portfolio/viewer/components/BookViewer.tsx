@@ -1,0 +1,1052 @@
+'use client';
+
+import { useRef, useEffect, Suspense, useState, useCallback } from 'react';
+import { useThree, useFrame, useLoader } from '@react-three/fiber';
+import ClientOnlyCanvas from '@/app/components/three/ClientOnlyCanvas';
+import { Grid, OrbitControls } from '@react-three/drei';
+import * as THREE from 'three';
+import { FBXLoader } from 'three-stdlib';
+import { assetPath } from '@/app/lib/assetPath';
+import CanvasKickstart from '@/app/components/three/CanvasKickstart';
+
+type BookState = 'open' | 'closed-left' | 'closed-right' | null;
+const publicPath = assetPath;
+const KNOWN_TOTAL_PAGES = 62;
+
+function BookModel({ 
+  onActionsReady,
+  currentPageIndex,
+  onPageMaterialsReady,
+  onBookStateChange
+}: { 
+  onActionsReady: (playAction: (actionName: string) => void) => void;
+  currentPageIndex: number;
+  onPageMaterialsReady: (materials: { leftPage: THREE.Material | null; rightPage: THREE.Material | null }) => void;
+  onBookStateChange: (state: BookState) => void;
+}) {
+  const fbx = useLoader(
+    FBXLoader,
+    publicPath('/assets/Book.fbx'),
+    (loader) => {
+      loader.setResourcePath(publicPath('/assets/Book.fbm/'));
+    }
+  );
+  const mixerRef = useRef<THREE.AnimationMixer | null>(null);
+  const actionsRef = useRef<Map<string, THREE.AnimationAction>>(new Map());
+  const currentActionRef = useRef<THREE.AnimationAction | null>(null);
+  const armatureRef = useRef<THREE.Object3D | null>(null);
+  const clipsRef = useRef<THREE.AnimationClip[]>([]);
+  const initializedRef = useRef(false);
+  const currentStateRef = useRef<BookState>('closed-right');
+  const transitionQueueRef = useRef<string[]>([]);
+  const isTransitioningRef = useRef(false);
+  const pageMaterialsRef = useRef<{ leftPage: THREE.Material | null; rightPage: THREE.Material | null; leftMesh: THREE.Mesh | null; rightMesh: THREE.Mesh | null; leftIndex: number; rightIndex: number }>({
+    leftPage: null,
+    rightPage: null,
+    leftMesh: null,
+    rightMesh: null,
+    leftIndex: -1,
+    rightIndex: -1
+  });
+
+  useEffect(() => {
+    // Prevent re-initialization
+    if (fbx && !initializedRef.current) {
+      initializedRef.current = true;
+      // Log all objects in the scene
+      console.log('=== FBX Scene Objects ===');
+      const allObjects: THREE.Object3D[] = [];
+      fbx.traverse((object) => {
+        allObjects.push(object);
+        console.log(`Object: ${object.name || 'unnamed'}, Type: ${object.type}, Children: ${object.children.length}`);
+      });
+      console.log('Total objects in scene:', allObjects.length);
+      console.log('All objects:', allObjects);
+
+      // Center the model
+      const box = new THREE.Box3().setFromObject(fbx);
+      const center = box.getCenter(new THREE.Vector3());
+      fbx.position.sub(center);
+
+      // Load and assign textures to cover and back materials
+      const textureLoader = new THREE.TextureLoader();
+      
+      // Define static material to texture mappings (cover and back)
+      // Try pdf-pages first, then fall back to pages
+      const staticMaterialTextures = [
+        {
+          materialName: 'CoverMaterial',
+          texturePath: publicPath('/pdf-pages/Cover.png'),
+          fallbackPaths: [
+            publicPath('/pages/Cover.png')
+          ]
+        },
+        {
+          materialName: 'BackMaterial',
+          texturePath: publicPath('/pdf-pages/back.png'),
+          fallbackPaths: [publicPath('/pages/back.png')]
+        }
+      ];
+      
+      // Helper function to configure texture
+      const configureTexture = (texture: THREE.Texture) => {
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.flipY = true;
+        texture.needsUpdate = true;
+      };
+      
+      // Helper function to assign texture to material
+      const assignTextureToMaterial = (
+        material: THREE.Material,
+        texture: THREE.Texture,
+        mesh: THREE.Mesh,
+        index: number
+      ) => {
+        // Configure texture for crisp text.
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 8;
+        texture.magFilter = THREE.LinearFilter;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.generateMipmaps = true;
+        texture.needsUpdate = true;
+
+        const pageMat = new THREE.MeshBasicMaterial({
+          map: texture,
+          color: 0xffffff,
+          toneMapped: false,
+        });
+        pageMat.needsUpdate = true;
+
+        if (Array.isArray(mesh.material)) {
+          const newMaterials = [...mesh.material];
+          newMaterials[index] = pageMat;
+          mesh.material = newMaterials;
+        } else {
+          mesh.material = pageMat;
+        }
+
+        return true;
+      };
+      
+      // Function to load and assign page textures
+      const loadPageTextures = (pageIndex: number) => {
+        const leftPageNum = pageIndex * 2 + 1;
+        const rightPageNum = pageIndex * 2 + 2;
+        
+        // Try both lowercase and uppercase extensions
+        const tryLoadTexture = (pageNum: number): Promise<THREE.Texture | null> => {
+          return new Promise((resolve) => {
+            const tryPath = (path: string) => {
+              textureLoader.load(
+                path,
+                (texture) => {
+                  configureTexture(texture);
+                  resolve(texture);
+                },
+                undefined,
+                () => {
+                  // Try next path
+                  if (path.endsWith('.png')) {
+                    tryPath(publicPath(`/pdf-pages/${pageNum}.PNG`));
+                  } else {
+                    resolve(null);
+                  }
+                }
+              );
+            };
+            tryPath(publicPath(`/pdf-pages/${pageNum}.png`));
+          });
+        };
+        
+        Promise.all([tryLoadTexture(leftPageNum), tryLoadTexture(rightPageNum)])
+          .then(([leftTexture, rightTexture]) => {
+            const { leftPage, rightPage, leftMesh, rightMesh, leftIndex, rightIndex } = pageMaterialsRef.current;
+            
+            if (leftPage && leftTexture && leftMesh !== null) {
+              assignTextureToMaterial(leftPage, leftTexture, leftMesh, leftIndex);
+              console.log(`✓ Loaded page ${leftPageNum} to LeftPageMaterial`);
+            }
+            
+            if (rightPage && rightTexture && rightMesh !== null) {
+              assignTextureToMaterial(rightPage, rightTexture, rightMesh, rightIndex);
+              console.log(`✓ Loaded page ${rightPageNum} to RightPageMaterial`);
+            }
+            
+            if (!leftTexture) {
+              console.warn(`⚠ Page ${leftPageNum} image not found`);
+            }
+            if (!rightTexture) {
+              console.warn(`⚠ Page ${rightPageNum} image not found`);
+            }
+          });
+      };
+      
+      // Load static textures (cover and back) with fallback support
+      const staticTexturePromises = staticMaterialTextures.map(({ materialName, texturePath, fallbackPaths = [] }: any) => {
+        return new Promise<{ materialName: string; texture: THREE.Texture }>((resolve, reject) => {
+          const pathsToTry = [texturePath, ...(fallbackPaths || [])];
+          let currentPathIndex = 0;
+          
+          const tryLoad = () => {
+            if (currentPathIndex >= pathsToTry.length) {
+              console.error(`Failed to load texture for ${materialName} after trying all paths`);
+              reject(new Error(`Could not load texture for ${materialName}`));
+              return;
+            }
+            
+            const path = pathsToTry[currentPathIndex];
+            textureLoader.load(
+              path,
+              (texture) => {
+                configureTexture(texture);
+                console.log(`Texture loaded for ${materialName}:`, path);
+                resolve({ materialName, texture });
+              },
+              undefined,
+              (error) => {
+                // Try next fallback path
+                currentPathIndex++;
+                if (currentPathIndex < pathsToTry.length) {
+                  console.log(`Failed to load ${path}, trying next: ${pathsToTry[currentPathIndex]}`);
+                  tryLoad();
+                } else {
+                  console.error(`Error loading texture for ${materialName} from all paths:`, error);
+                  reject(error);
+                }
+              }
+            );
+          };
+          tryLoad();
+        });
+      });
+      
+      // Wait for static textures to load, then assign them and find page materials
+      Promise.all(staticTexturePromises)
+        .then((loadedTextures) => {
+          console.log('Static textures loaded, assigning to materials...');
+          
+          // Create a map of material names to textures
+          const textureMap = new Map<string, THREE.Texture>();
+          loadedTextures.forEach(({ materialName, texture }) => {
+            textureMap.set(materialName, texture);
+          });
+          
+          // Traverse the model to find and assign materials
+          const foundMaterials = new Set<string>();
+          
+          fbx.traverse((object) => {
+            if (object instanceof THREE.Mesh) {
+              const mesh = object as THREE.Mesh;
+              
+              // Check if mesh has materials
+              if (mesh.material) {
+                const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                
+                materials.forEach((material, index) => {
+                  // Handle static materials (cover and back)
+                  for (const { materialName } of staticMaterialTextures) {
+                    if (material.name === materialName || material.name.includes(materialName)) {
+                      const texture = textureMap.get(materialName);
+                      if (texture) {
+                        console.log(`Assigning texture to ${materialName} on mesh:`, mesh.name);
+                        if (assignTextureToMaterial(material, texture, mesh, index)) {
+                          foundMaterials.add(materialName);
+                          console.log(`✓ ${materialName} texture assigned successfully`);
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Store page material references
+                  if (material.name === 'LeftPageMaterial' || material.name.includes('LeftPageMaterial')) {
+                    pageMaterialsRef.current.leftPage = material;
+                    pageMaterialsRef.current.leftMesh = mesh;
+                    pageMaterialsRef.current.leftIndex = index;
+                    console.log('Found LeftPageMaterial');
+                  }
+                  if (material.name === 'RightPageMaterial' || material.name.includes('RightPageMaterial')) {
+                    pageMaterialsRef.current.rightPage = material;
+                    pageMaterialsRef.current.rightMesh = mesh;
+                    pageMaterialsRef.current.rightIndex = index;
+                    console.log('Found RightPageMaterial');
+                  }
+                });
+              }
+            }
+          });
+          
+          // Notify parent that page materials are ready
+          onPageMaterialsReady({
+            leftPage: pageMaterialsRef.current.leftPage,
+            rightPage: pageMaterialsRef.current.rightPage
+          });
+          // Load the initial visible pages immediately (otherwise they are blank until pageIndex changes).
+          loadPageTextures(currentPageIndex);
+          
+          // Log which materials were found
+          staticMaterialTextures.forEach(({ materialName }) => {
+            if (!foundMaterials.has(materialName)) {
+              console.warn(`⚠ ${materialName} not found in model`);
+            }
+          });
+        })
+        .catch((error) => {
+          console.error('Error loading textures:', error);
+        });
+
+      // Log animations found
+      console.log('=== FBX Animations ===');
+      console.log('Total animations:', fbx.animations?.length || 0);
+      if (fbx.animations && fbx.animations.length > 0) {
+        fbx.animations.forEach((clip, index) => {
+          console.log(`Animation ${index + 1}:`, {
+            name: clip.name,
+            duration: clip.duration,
+            tracks: clip.tracks.length,
+            tracksInfo: clip.tracks.map(track => ({
+              name: track.name,
+              type: track.constructor.name,
+              times: track.times.length
+            }))
+          });
+        });
+        clipsRef.current = fbx.animations;
+      }
+
+      // Set up animation mixer (but don't create actions yet)
+      if (fbx.animations && fbx.animations.length > 0) {
+        const mixer = new THREE.AnimationMixer(fbx);
+        mixerRef.current = mixer;
+
+        // Find the Book Armature
+        const armature = fbx.getObjectByName('Book Armature') || fbx;
+        armatureRef.current = armature;
+        console.log('=== Book Armature ===');
+        console.log('Armature found:', armature.name);
+        console.log('Armature object:', armature);
+        console.log('Armature type:', armature.type);
+        console.log('Armature children:', armature.children.length);
+        if (armature.children.length > 0) {
+          console.log('Armature children:', armature.children.map(child => ({
+            name: child.name,
+            type: child.type
+          })));
+        }
+
+        // Helper function to create a pose clip from an animation (extracts final frame)
+        const createPoseClip = (sourceClip: THREE.AnimationClip): THREE.AnimationClip => {
+          const poseTracks: THREE.KeyframeTrack[] = [];
+          
+          sourceClip.tracks.forEach(track => {
+            const times = track.times;
+            const values = track.values;
+            const lastIndex = times.length - 1;
+            const stride = track.getValueSize();
+            const finalValues: number[] = [];
+            
+            // Extract final values
+            for (let i = 0; i < stride; i++) {
+              finalValues.push(values[lastIndex * stride + i]);
+            }
+            
+            // Create track with single keyframe at time 0 (the pose)
+            const poseTrack = new (track.constructor as any)(
+              track.name,
+              [0], // Single time point
+              finalValues
+            );
+            
+            poseTracks.push(poseTrack);
+          });
+          
+          // Create clip with very short duration (just for blending)
+          return new THREE.AnimationClip(
+            `Pose_${sourceClip.name}`,
+            0.1, // Very short duration
+            poseTracks
+          );
+        };
+
+        // Helper function to transition to a state
+        const transitionToState = (targetState: BookState, actionName: string) => {
+          if (isTransitioningRef.current) {
+            // Queue the transition
+            transitionQueueRef.current.push(actionName);
+            return;
+          }
+
+          console.log(`=== Transitioning to ${targetState} ===`);
+          console.log('Current state:', currentStateRef.current);
+          console.log('Target state:', targetState);
+          
+          // Check if action already exists in cache
+          let action = actionsRef.current.get(actionName);
+          
+          if (!action) {
+            // Create pose clip on-demand
+            console.log('Creating pose clip on-demand:', actionName);
+            
+            // Find the clip that matches the action name
+            let sourceClip = clipsRef.current.find(clip => {
+              const clipName = clip.name.replace(/^Book Armature\|/, '');
+              return clipName === actionName || clip.name === actionName;
+            });
+            
+            if (sourceClip && mixerRef.current && armatureRef.current) {
+              // Create pose clip from the animation
+              const poseClip = createPoseClip(sourceClip);
+              
+              // Create action from pose clip
+              action = mixerRef.current.clipAction(poseClip, armatureRef.current);
+              action.setLoop(THREE.LoopOnce, 0);
+              action.clampWhenFinished = true;
+              
+              // Store in cache
+              actionsRef.current.set(actionName, action);
+              
+              // Also store with the full name
+              const fullName = sourceClip.name;
+              if (fullName !== actionName) {
+                actionsRef.current.set(fullName, action);
+              }
+              
+              console.log(`Pose clip created: ${sourceClip.name} -> stored as: ${actionName}`);
+            } else {
+              console.warn('Clip not found for action:', actionName);
+              console.log('Available clips:', clipsRef.current.map(c => c.name));
+              return;
+            }
+          }
+          
+          if (action) {
+            isTransitioningRef.current = true;
+            
+            // Stop current action with fade out
+            if (currentActionRef.current) {
+              currentActionRef.current.fadeOut(1.0);
+            }
+            
+            // Set pose clip to final frame immediately (it's already a pose, so just blend to it)
+            action.reset();
+            action.time = 0; // Start at the pose
+            action.fadeIn(1.0); // 1 second fade in
+            action.play();
+            currentActionRef.current = action;
+            
+            // Update state after transition completes
+            setTimeout(() => {
+              currentStateRef.current = targetState;
+              isTransitioningRef.current = false;
+              onBookStateChange(targetState); // Notify parent of state change
+              
+              // Process queued transitions
+              if (transitionQueueRef.current.length > 0) {
+                const nextAction = transitionQueueRef.current.shift()!;
+                // Determine target state from action name
+                let nextState: BookState = null;
+                if (nextAction === 'Open Book State') nextState = 'open';
+                else if (nextAction === 'Close Book State Left') nextState = 'closed-left';
+                else if (nextAction === 'Close Book State Right') nextState = 'closed-right';
+                
+                if (nextState) {
+                  transitionToState(nextState, nextAction);
+                }
+              }
+            }, 1000); // After fade completes
+          }
+        };
+
+        // Create playAction function with state tracking logic
+        const playAction = (actionName: string) => {
+          console.log('=== Requested Action ===');
+          console.log('Action name:', actionName);
+          console.log('Current state:', currentStateRef.current);
+          
+          // Determine target state
+          let targetState: BookState = null;
+          if (actionName === 'Open Book State') targetState = 'open';
+          else if (actionName === 'Close Book State Left') targetState = 'closed-left';
+          else if (actionName === 'Close Book State Right') targetState = 'closed-right';
+          
+          if (!targetState) {
+            console.warn('Unknown action:', actionName);
+            return;
+          }
+          
+          // State transition logic
+          if (targetState === 'open') {
+            // If already open, do nothing
+            if (currentStateRef.current === 'open') {
+              console.log('Book is already open, ignoring request');
+              return;
+            }
+          }
+          
+          // Direct transition
+          transitionToState(targetState, actionName);
+        };
+
+        onActionsReady(playAction);
+        
+        // Notify parent of initial state
+        onBookStateChange('closed-right');
+      } else {
+        console.warn('No animations found in FBX file');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fbx]); // Only depend on fbx, not onActionsReady
+
+  // Effect to update pages when page index changes
+  useEffect(() => {
+    if (!fbx || !initializedRef.current) return;
+    
+    const textureLoader = new THREE.TextureLoader();
+    
+    const configureTexture = (texture: THREE.Texture) => {
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.flipY = true;
+      texture.needsUpdate = true;
+    };
+    
+    const assignTextureToMaterial = (
+      material: THREE.Material,
+      texture: THREE.Texture,
+      mesh: THREE.Mesh,
+      index: number
+    ) => {
+      // Configure texture for crisp text.
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 8;
+      texture.magFilter = THREE.LinearFilter;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.generateMipmaps = true;
+      texture.needsUpdate = true;
+
+      const pageMat = new THREE.MeshBasicMaterial({
+        map: texture,
+        color: 0xffffff,
+        toneMapped: false,
+      });
+      pageMat.needsUpdate = true;
+
+      if (Array.isArray(mesh.material)) {
+        const newMaterials = [...mesh.material];
+        newMaterials[index] = pageMat;
+        mesh.material = newMaterials;
+      } else {
+        mesh.material = pageMat;
+      }
+
+      return true;
+    };
+    
+    const leftPageNum = currentPageIndex * 2 + 1;
+    const rightPageNum = currentPageIndex * 2 + 2;
+    
+    const tryLoadTexture = (pageNum: number): Promise<THREE.Texture | null> => {
+      return new Promise((resolve) => {
+        const tryPath = (path: string) => {
+          textureLoader.load(
+            path,
+            (texture) => {
+              configureTexture(texture);
+              resolve(texture);
+            },
+            undefined,
+            () => {
+              if (path.endsWith('.png')) {
+                tryPath(publicPath(`/pdf-pages/${pageNum}.PNG`));
+              } else {
+                resolve(null);
+              }
+            }
+          );
+        };
+        tryPath(publicPath(`/pdf-pages/${pageNum}.png`));
+      });
+    };
+    
+    Promise.all([tryLoadTexture(leftPageNum), tryLoadTexture(rightPageNum)])
+      .then(([leftTexture, rightTexture]) => {
+        const { leftPage, rightPage, leftMesh, rightMesh, leftIndex, rightIndex } = pageMaterialsRef.current;
+        
+        if (leftPage && leftTexture && leftMesh !== null) {
+          assignTextureToMaterial(leftPage, leftTexture, leftMesh, leftIndex);
+          console.log(`✓ Updated LeftPageMaterial with page ${leftPageNum}`);
+        }
+        
+        if (rightPage && rightTexture && rightMesh !== null) {
+          assignTextureToMaterial(rightPage, rightTexture, rightMesh, rightIndex);
+          console.log(`✓ Updated RightPageMaterial with page ${rightPageNum}`);
+        }
+        
+        if (!leftTexture) {
+          console.warn(`⚠ Page ${leftPageNum} image not found`);
+        }
+        if (!rightTexture) {
+          console.warn(`⚠ Page ${rightPageNum} image not found`);
+        }
+      });
+  }, [fbx, currentPageIndex]);
+
+  // Update animation mixer on each frame
+  useFrame((state, delta) => {
+    if (mixerRef.current) {
+      mixerRef.current.update(delta);
+    }
+  });
+
+  if (!fbx) return null;
+
+  return <primitive object={fbx} />;
+}
+
+function CameraController({ resetKey }: { resetKey: number }) {
+  const { camera } = useThree();
+  
+  useEffect(() => {
+    // Set initial camera position - moved backward for better view
+    camera.position.set(0, 50, 0); // Z value increased to move camera backward
+    camera.lookAt(0, 0, 0);
+    camera.up.set(0, 1, 0);
+    
+    // Make camera more orthographic-like by reducing FOV
+    if (camera instanceof THREE.PerspectiveCamera) {
+      camera.fov = 25; // Lower FOV (default is 50) makes it more orthographic-like
+      camera.updateProjectionMatrix();
+    }
+  }, [camera, resetKey]);
+
+  // Note: Removed forced top view constraint for debugging (rotation enabled)
+
+  return null;
+}
+
+function LimitedOrbitControls({
+  resetKey,
+  onDefaultChange,
+}: {
+  resetKey: number;
+  onDefaultChange: (isDefault: boolean) => void;
+}) {
+  const controlsRef = useRef<any>(null);
+  const panBoundsRef = useRef({
+    minX: -7,
+    maxX: 7,
+    minY: -7,
+    maxY: 7,
+    minZ: -7,
+    maxZ: 7,
+  });
+  const defaultCameraPositionRef = useRef(new THREE.Vector3(0, 50, 0));
+  const defaultTargetRef = useRef(new THREE.Vector3(0, 0, 0));
+  const defaultDirectionRef = useRef(
+    new THREE.Spherical().setFromVector3(
+      defaultCameraPositionRef.current.clone().sub(defaultTargetRef.current)
+    )
+  );
+  const lastDefaultStateRef = useRef<boolean | null>(null);
+  
+  useEffect(() => {
+    if (controlsRef.current) {
+      // Set middle mouse to pan instead of dolly (zoom)
+      controlsRef.current.mouseButtons = {
+        LEFT: THREE.MOUSE.PAN,
+        MIDDLE: THREE.MOUSE.PAN,
+        RIGHT: -1 as unknown as THREE.MOUSE,
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    if (controlsRef.current) {
+      controlsRef.current.target.set(0, 0, 0);
+      controlsRef.current.update();
+      controlsRef.current.saveState();
+      controlsRef.current.reset();
+    }
+  }, [resetKey]);
+
+  useFrame(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+
+    const { minX, maxX, minY, maxY, minZ, maxZ } = panBoundsRef.current;
+    const target = controls.target;
+
+    const clampedX = Math.min(Math.max(target.x, minX), maxX);
+    const clampedY = Math.min(Math.max(target.y, minY), maxY);
+    const clampedZ = Math.min(Math.max(target.z, minZ), maxZ);
+
+    if (clampedX !== target.x || clampedY !== target.y || clampedZ !== target.z) {
+      const deltaX = clampedX - target.x;
+      const deltaY = clampedY - target.y;
+      const deltaZ = clampedZ - target.z;
+
+      target.set(clampedX, clampedY, clampedZ);
+      controls.object.position.x += deltaX;
+      controls.object.position.y += deltaY;
+      controls.object.position.z += deltaZ;
+      controls.update();
+    }
+
+    const position = controls.object.position as THREE.Vector3;
+    const targetDistance = target.distanceTo(defaultTargetRef.current);
+
+    const currentDirection = position.clone().sub(target);
+    const currentSpherical = new THREE.Spherical().setFromVector3(currentDirection);
+    const defaultSpherical = defaultDirectionRef.current;
+    const angleEpsilon = 0.002;
+    const thetaMatch = Math.abs(currentSpherical.theta - defaultSpherical.theta) < angleEpsilon;
+    const phiMatch = Math.abs(currentSpherical.phi - defaultSpherical.phi) < angleEpsilon;
+
+    const isDefault = targetDistance < 0.01 && thetaMatch && phiMatch;
+    if (lastDefaultStateRef.current !== isDefault) {
+      lastDefaultStateRef.current = isDefault;
+      onDefaultChange(isDefault);
+    }
+  });
+  
+  return <OrbitControls ref={controlsRef} makeDefault minDistance={15} maxDistance={50} />;
+}
+
+export default function BookViewer({ onPlayActionReady }: { onPlayActionReady: (playAction: (actionName: string) => void) => void }) {
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [maxPageIndex, setMaxPageIndex] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [pageMaterialsReady, setPageMaterialsReady] = useState(false);
+  const [bookState, setBookState] = useState<BookState>('open'); // Start open at page 1
+  const [resetKey, setResetKey] = useState(0);
+  const [showSummary, setShowSummary] = useState(false);
+  const [isCameraDefault, setIsCameraDefault] = useState(true);
+  const playActionRef = useRef<((actionName: string) => void) | null>(null);
+  const hasInitializedRef = useRef(false);
+  const viewerRef = useRef<HTMLDivElement | null>(null);
+  
+  const handleBookStateChange = (state: BookState) => {
+    setBookState(state);
+  };
+  
+  const handleActionsReady = (playAction: (actionName: string) => void) => {
+    playActionRef.current = playAction;
+    onPlayActionReady(playAction);
+    
+    // Open book on initial load at page 1 (index 0)
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+      // Small delay to ensure book model is ready
+      setTimeout(() => {
+        setCurrentPageIndex(0);
+        playAction('Open Book State');
+      }, 100);
+    }
+  };
+  
+      const handlePageMaterialsReady = (materials: { leftPage: THREE.Material | null; rightPage: THREE.Material | null }) => {
+    if (materials.leftPage && materials.rightPage) {
+      setPageMaterialsReady(true);
+      if (KNOWN_TOTAL_PAGES > 0) {
+        setTotalPages(KNOWN_TOTAL_PAGES);
+        setMaxPageIndex(Math.max(Math.ceil(KNOWN_TOTAL_PAGES / 2) - 1, 0));
+        return;
+      }
+      // Discover how many pages exist (assumes sequential numbering).
+      const checkMaxPages = async () => {
+        const pageExists = async (pageNum: number): Promise<boolean> => {
+          const candidates = [
+            publicPath(`/pdf-pages/${pageNum}.png`),
+            publicPath(`/pdf-pages/${pageNum}.PNG`)
+          ];
+          for (const url of candidates) {
+            try {
+              const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+              if (res.ok) return true;
+            } catch {
+              // ignore and try next candidate
+            }
+          }
+          return false;
+        };
+
+        const maxCap = 200;
+        let lastFound = 0;
+        for (let pageNum = 1; pageNum <= maxCap; pageNum += 1) {
+          const exists = await pageExists(pageNum);
+          if (!exists) break;
+          lastFound = pageNum;
+        }
+
+        if (!lastFound) {
+          console.warn('No page images found (1.png, 2.png)');
+          setTotalPages(0);
+          setMaxPageIndex(0);
+          return;
+        }
+
+        setTotalPages(lastFound);
+        setMaxPageIndex(Math.max(Math.ceil(lastFound / 2) - 1, 0));
+      };
+      checkMaxPages();
+    }
+  };
+  
+  const handleNextPage = () => {
+    // If book is closed-right, open it and go to first page
+    if (bookState === 'closed-right') {
+      if (playActionRef.current) {
+        playActionRef.current('Open Book State');
+        setCurrentPageIndex(0);
+      }
+      return;
+    }
+    
+    if (currentPageIndex < maxPageIndex) {
+      setCurrentPageIndex(prev => prev + 1);
+    } else {
+      // No more pages, close book left
+      if (playActionRef.current) {
+        playActionRef.current('Close Book State Left');
+      }
+    }
+  };
+  
+  const handlePreviousPage = () => {
+    // If book is closed-left, open it and go to last page
+    if (bookState === 'closed-left') {
+      if (playActionRef.current) {
+        playActionRef.current('Open Book State');
+        setCurrentPageIndex(maxPageIndex);
+      }
+      return;
+    }
+    
+    if (currentPageIndex > 0) {
+      setCurrentPageIndex(prev => prev - 1);
+    } else {
+      // At first page, close book right
+      if (playActionRef.current) {
+        playActionRef.current('Close Book State Right');
+      }
+    }
+  };
+
+  const handleSliderChange = (value: number) => {
+    if (bookState !== 'open' && playActionRef.current) {
+      playActionRef.current('Open Book State');
+    }
+    setCurrentPageIndex(value);
+  };
+
+  const handleJumpToPage = (pageIndex: number) => {
+    const clampedIndex = Math.min(Math.max(pageIndex, 0), maxPageIndex);
+    handleSliderChange(clampedIndex);
+  };
+
+  useEffect(() => {
+    if (!pageMaterialsReady) return;
+    setResetKey((prev) => prev + 1);
+  }, [currentPageIndex, pageMaterialsReady]);
+
+  const handleResetView = () => {
+    setResetKey((prev) => prev + 1);
+  };
+
+  const handleToggleFullscreen = useCallback(async () => {
+    const element = viewerRef.current;
+    if (!element) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await element.requestFullscreen();
+      }
+    } catch {
+      // Ignore fullscreen errors (e.g., not allowed without user gesture)
+    }
+  }, []);
+
+  const leftPage = totalPages ? currentPageIndex * 2 + 1 : 0;
+  const rightPage = totalPages
+    ? Math.min(currentPageIndex * 2 + 2, totalPages)
+    : 0;
+
+  return (
+    <div
+      ref={viewerRef}
+      className="w-full h-full relative"
+      onContextMenu={(event) => event.preventDefault()}
+      onMouseDown={(event) => {
+        if (event.button === 1 || event.button === 2) {
+          event.preventDefault();
+        }
+      }}
+      onAuxClick={(event) => {
+        if (event.button === 1 || event.button === 2) {
+          event.preventDefault();
+        }
+      }}
+    >
+      <ClientOnlyCanvas>
+        <Suspense fallback={null}>
+          <CanvasKickstart />
+          <CameraController resetKey={resetKey} />
+          <fog attach="fog" args={['#d8d8d8', 60, 220]} />
+          {/* Reduced ambient light for less brightness */}
+          <ambientLight intensity={0.8} />
+          {/* Hemisphere light for natural lighting */}
+          <hemisphereLight intensity={0.6} color={0xffffff} groundColor={0x444444} />
+          {/* Multiple directional lights from different angles */}
+          <directionalLight position={[10, 10, 5]} intensity={0.8} />
+          <directionalLight position={[-10, 10, -5]} intensity={0.6} />
+          <directionalLight position={[0, 10, 0]} intensity={0.6} />
+          {/* Point light for additional illumination */}
+          <pointLight position={[0, 5, 0]} intensity={0.6} />
+          <BookModel 
+            onActionsReady={handleActionsReady} 
+            currentPageIndex={currentPageIndex}
+            onPageMaterialsReady={handlePageMaterialsReady}
+            onBookStateChange={handleBookStateChange}
+          />
+          <Grid
+            position={[0, -0.6, 0]}
+            args={[200, 200]}
+            cellSize={4}
+            cellThickness={0.25}
+            sectionSize={20}
+            sectionThickness={0.5}
+            cellColor="#e2e2e2"
+            sectionColor="#d4d4d4"
+            fadeDistance={140}
+            fadeStrength={1.6}
+          />
+          <LimitedOrbitControls resetKey={resetKey} onDefaultChange={setIsCameraDefault} />
+        </Suspense>
+      </ClientOnlyCanvas>
+      
+      {/* Page Navigation Buttons */}
+      {pageMaterialsReady && (
+        <>
+          <div className="absolute left-4 top-4 z-50 flex items-center gap-2">
+            <button
+              aria-label="Toggle summary"
+              className="rounded-full border border-white/30 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:text-white"
+              onClick={() => setShowSummary((prev) => !prev)}
+              title="Toggle summary"
+              type="button"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 6h16" />
+                <path d="M4 12h16" />
+                <path d="M4 18h16" />
+              </svg>
+            </button>
+          </div>
+          {!isCameraDefault && (
+            <button
+              aria-label="Reset view"
+              className="absolute bottom-4 right-4 z-50 rounded-full border border-white/30 bg-white/10 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:bg-black/10 dark:text-white"
+              onClick={handleResetView}
+              title="Reset view"
+              type="button"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 12a9 9 0 1 0 3-6.7" />
+                <path d="M3 5v4h4" />
+              </svg>
+            </button>
+          )}
+          {showSummary && (
+            <div className="absolute left-[76px] top-4 z-50 hidden w-[220px] flex-col gap-3 md:flex">
+              {[
+                { label: 'Chapter 01', pageIndex: 0 },
+                { label: 'Chapter 02', pageIndex: 1 },
+                { label: 'Chapter 03', pageIndex: 2 },
+                { label: 'Chapter 04', pageIndex: 3 },
+              ].map((chapter) => (
+                <button
+                  key={chapter.label}
+                  className="rounded-2xl border border-white/20 bg-white/10 px-4 py-4 text-left text-xs font-semibold uppercase tracking-widest text-black shadow-lg backdrop-blur-md opacity-80 transition-opacity hover:opacity-100 dark:border-white/10 dark:bg-black/10 dark:text-white"
+                  onClick={() => handleJumpToPage(chapter.pageIndex)}
+                  type="button"
+                >
+                  {chapter.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="absolute right-4 top-4 z-50 flex items-center gap-2">
+            <button
+              aria-label="Toggle fullscreen"
+              className="rounded-full border border-white/30 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:text-white"
+              onClick={handleToggleFullscreen}
+              title="Fullscreen"
+              type="button"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M8 3H3v5" />
+                <path d="M21 8V3h-5" />
+                <path d="M3 16v5h5" />
+                <path d="M16 21h5v-5" />
+              </svg>
+            </button>
+            <a
+              aria-label="Download PDF"
+              className="rounded-full border border-white/30 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:text-white"
+              download
+              href={publicPath('/Portfolio_EzzahirAnass_2026.pdf')}
+              title="Download PDF"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 3v10" />
+                <path d="M8 9l4 4 4-4" />
+                <path d="M5 21h14" />
+              </svg>
+            </a>
+          </div>
+          <button
+            onClick={handlePreviousPage}
+            disabled={currentPageIndex === 0 && bookState === 'closed-right'}
+            aria-label="Previous page"
+            className="absolute left-4 top-1/2 z-50 -translate-y-1/2 rounded-full border border-white/30 bg-white/10 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/20 dark:bg-black/10 dark:text-white"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <button
+            onClick={handleNextPage}
+            disabled={currentPageIndex >= maxPageIndex && bookState === 'closed-left'}
+            aria-label="Next page"
+            className="absolute right-4 top-1/2 z-50 -translate-y-1/2 rounded-full border border-white/30 bg-white/10 p-3 text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/20 dark:bg-black/10 dark:text-white"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </button>
+          <div className="absolute bottom-4 left-1/2 z-50 w-1/2 max-w-[520px] -translate-x-1/2 rounded-full border border-white/30 px-5 py-3 text-xs font-semibold text-black shadow-lg backdrop-blur-md opacity-70 transition-opacity hover:opacity-100 dark:border-white/20 dark:text-white">
+            <div className="flex items-center gap-3">
+              <div className="min-w-[56px] text-left">
+                {totalPages ? `${leftPage}-${rightPage}` : '0-0'}
+              </div>
+              <input
+                aria-label="Page slider"
+                className="range-modern w-full"
+                disabled={maxPageIndex === 0}
+                max={maxPageIndex}
+                min={0}
+                onChange={(event) => handleSliderChange(Number(event.target.value))}
+                step={1}
+                type="range"
+                value={currentPageIndex}
+              />
+              <div className="min-w-[28px] text-right">{totalPages || 0}</div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
