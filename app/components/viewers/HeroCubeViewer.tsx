@@ -15,9 +15,8 @@ type CubeControls = {
   rotYSpeed: number;
   color: string;
   opacity: number;
-  edgePower: number;
-  edgeStrength: number;
   wireframe: boolean;
+  wireOpacity: number;
 };
 
 function SceneBootstrap() {
@@ -36,72 +35,60 @@ function SceneBootstrap() {
 }
 
 function Cube({ controls }: { controls: CubeControls }) {
-  const meshRef = useRef<THREE.Mesh | null>(null);
+  const groupRef = useRef<THREE.Group | null>(null);
   const uniforms = useMemo(
     () => ({
       uColor: { value: new THREE.Color(controls.color) },
-      uEdgeColor: { value: new THREE.Color("#ffffff") },
       uOpacity: { value: controls.opacity },
-      uEdgePower: { value: controls.edgePower },
-      uEdgeStrength: { value: controls.edgeStrength },
     }),
-    [controls.color, controls.edgePower, controls.edgeStrength, controls.opacity]
+    [controls.color, controls.opacity]
   );
 
   useFrame(() => {
-    const mesh = meshRef.current;
-    if (!mesh) return;
-    mesh.rotation.x += controls.rotXSpeed;
-    mesh.rotation.y += controls.rotYSpeed;
+    const group = groupRef.current;
+    if (!group) return;
+    group.rotation.x += controls.rotXSpeed;
+    group.rotation.y += controls.rotYSpeed;
   });
 
   return (
-    <mesh
-      ref={meshRef}
+    <group
+      ref={groupRef}
       position={[controls.posX, controls.posY, controls.posZ]}
-      castShadow
-      receiveShadow
     >
-      <boxGeometry args={[controls.size, controls.size, controls.size]} />
-      <shaderMaterial
-        transparent
-        depthWrite={false}
-        side={THREE.DoubleSide}
-        wireframe={controls.wireframe}
-        uniforms={uniforms}
-        vertexShader={`
-          varying vec3 vNormal;
-          varying vec3 vWorldPos;
+      <mesh castShadow receiveShadow>
+        <boxGeometry args={[controls.size, controls.size, controls.size]} />
+        <shaderMaterial
+          transparent
+          depthWrite={false}
+          side={THREE.DoubleSide}
+          uniforms={uniforms}
+          vertexShader={`
+            void main() {
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `}
+          fragmentShader={`
+            uniform vec3 uColor;
+            uniform float uOpacity;
 
-          void main() {
-            vec4 worldPos = modelMatrix * vec4(position, 1.0);
-            vWorldPos = worldPos.xyz;
-            vNormal = normalize(mat3(modelMatrix) * normal);
-            gl_Position = projectionMatrix * viewMatrix * worldPos;
-          }
-        `}
-        fragmentShader={`
-          uniform vec3 uColor;
-          uniform vec3 uEdgeColor;
-          uniform float uOpacity;
-          uniform float uEdgePower;
-          uniform float uEdgeStrength;
-
-          varying vec3 vNormal;
-          varying vec3 vWorldPos;
-
-          void main() {
-            vec3 viewDir = normalize(cameraPosition - vWorldPos);
-            float facing = max(dot(normalize(vNormal), viewDir), 0.0);
-            float edge = pow(1.0 - facing, uEdgePower);
-            float edgeMix = clamp(edge * uEdgeStrength, 0.0, 1.0);
-            vec3 color = mix(uColor, uEdgeColor, edgeMix);
-            float alpha = clamp(uOpacity + edge * 0.35, 0.0, 1.0);
-            gl_FragColor = vec4(color, alpha);
-          }
-        `}
-      />
-    </mesh>
+            void main() {
+              gl_FragColor = vec4(uColor, uOpacity);
+            }
+          `}
+        />
+      </mesh>
+      <mesh visible={controls.wireframe}>
+        <boxGeometry args={[controls.size, controls.size, controls.size]} />
+        <meshBasicMaterial
+          color="#ffffff"
+          wireframe
+          transparent
+          opacity={controls.wireOpacity}
+          depthWrite={false}
+        />
+      </mesh>
+    </group>
   );
 }
 
@@ -113,10 +100,9 @@ const initialControls: CubeControls = {
   rotXSpeed: 0.01,
   rotYSpeed: 0.015,
   color: "#8bd3ff",
-  opacity: 0.3,
-  edgePower: 2.8,
-  edgeStrength: 1.2,
-  wireframe: false,
+  opacity: 0.24,
+  wireframe: true,
+  wireOpacity: 0.95,
 };
 
 export default function HeroCubeViewer() {
@@ -183,9 +169,8 @@ export default function HeroCubeViewer() {
     const material = gui.addFolder("Material");
     material.addColor(controlsRef.current, "color").name("Color").onChange(sync);
     material.add(controlsRef.current, "opacity", 0.05, 0.9, 0.01).name("Opacity").onChange(sync);
-    material.add(controlsRef.current, "edgePower", 0.5, 8, 0.1).name("Edge Power").onChange(sync);
-    material.add(controlsRef.current, "edgeStrength", 0.2, 3, 0.05).name("Edge Strength").onChange(sync);
     material.add(controlsRef.current, "wireframe").name("Wireframe").onChange(sync);
+    material.add(controlsRef.current, "wireOpacity", 0.05, 1, 0.01).name("Wire Opacity").onChange(sync);
     material.open();
 
     return () => {
