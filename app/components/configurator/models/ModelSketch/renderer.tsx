@@ -6,6 +6,8 @@ import { useThree, type ThreeEvent } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import type { ParamValues } from '../../types';
 import { assetPath } from '@/app/lib/assetPath';
+import ThemedSurfaceMaterial from '../../ThemedSurfaceMaterial';
+import { useConfiguratorThemePalette } from '../../theme';
 
 type Mode = 'draw' | 'edit';
 
@@ -97,6 +99,7 @@ const subdividePolyline = (
 
 export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
   const state = params as Params;
+  const theme = useConfiguratorThemePalette();
   const [mode, setMode] = useState<Mode>('draw');
   const [isDrawing, setIsDrawing] = useState(true);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -130,6 +133,9 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
   const dubaiClone = useMemo(() => dubaiScene.clone(true), [dubaiScene]);
 
   useEffect(() => {
+    const siteColor = new THREE.Color(theme.surfaceDark);
+    const siteWireColor = new THREE.Color(theme.gridMinor);
+
     dubaiClone.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       const mesh = child as THREE.Mesh;
@@ -138,7 +144,7 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
       materials.forEach((mat) => {
         if (!mat || typeof mat !== 'object') return;
         const m = mat as THREE.MeshStandardMaterial;
-        m.color.set(0x000000);
+        m.color.copy(siteColor);
         m.transparent = true;
         m.opacity = 0.5;
         m.roughness = 0.7;
@@ -148,8 +154,9 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
       if (mesh.geometry) {
         const edgesGeom = new THREE.EdgesGeometry(mesh.geometry, 20);
         const edgesMat = new THREE.LineBasicMaterial({
-          color: 0x333333,
-          transparent: false,
+          color: siteWireColor,
+          transparent: true,
+          opacity: 0.16,
         });
         const lineSegments = new THREE.LineSegments(edgesGeom, edgesMat);
         lineSegments.name = '__wireframe_overlay';
@@ -157,7 +164,25 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
         mesh.add(lineSegments);
       }
     });
-  }, [dubaiClone]);
+
+    return () => {
+      dubaiClone.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        child.children
+          .filter((node) => node.name === '__wireframe_overlay')
+          .forEach((node) => {
+            child.remove(node);
+            const line = node as THREE.LineSegments;
+            line.geometry.dispose();
+            if (Array.isArray(line.material)) {
+              line.material.forEach((mat) => mat.dispose());
+            } else {
+              line.material.dispose();
+            }
+          });
+      });
+    };
+  }, [dubaiClone, theme.gridMinor, theme.surfaceDark]);
 
   const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
   const floorHeight = Math.max(state.floorHeight ?? 0, 0);
@@ -658,18 +683,18 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
 
       {baseProfilePoints.length > 1 ? (
         <lineSegments geometry={baseLineGeometry}>
-          <lineBasicMaterial color="#f59e0b" linewidth={2} />
+          <lineBasicMaterial color={theme.accent} linewidth={1} transparent opacity={0.85} />
         </lineSegments>
       ) : null}
 
       {previewPoint && tower.points.length > 0 && mode === 'draw' && isDrawing ? (
         <>
           <lineSegments geometry={previewLineGeometry}>
-            <lineBasicMaterial color="#fbbf24" linewidth={2} />
+            <lineBasicMaterial color={theme.accent2} linewidth={1} transparent opacity={0.85} />
           </lineSegments>
           <mesh position={[previewPoint.x, previewPoint.y, previewPoint.z]}>
             <sphereGeometry args={[0.18, 16, 16]} />
-            <meshStandardMaterial color="#fbbf24" />
+            <ThemedSurfaceMaterial tone="accent2" />
           </mesh>
         </>
       ) : null}
@@ -680,26 +705,37 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
           <meshBasicMaterial color="#000000" transparent opacity={0} />
           <lineSegments>
             <edgesGeometry args={[new THREE.PlaneGeometry(0.5, 0.5)]} />
-            <lineBasicMaterial color={closeToStart ? '#22c55e' : '#fbbf24'} linewidth={2} />
+            <lineBasicMaterial
+              color={closeToStart ? theme.accent2 : theme.accent}
+              linewidth={1}
+              transparent
+              opacity={0.85}
+            />
           </lineSegments>
         </mesh>
       ) : null}
 
       {towerData.sideLineGeometries.map((geometry, index) => (
         <lineSegments key={`side-${index}`} geometry={geometry}>
-          <lineBasicMaterial color="#d1d5db" linewidth={1} transparent opacity={0.6} />
+          <lineBasicMaterial color={theme.line} linewidth={1} transparent opacity={0.34} />
         </lineSegments>
       ))}
 
       {towerData.sideFaceGeometry ? (
         <mesh geometry={towerData.sideFaceGeometry}>
-          <meshStandardMaterial color="#ffffff" transparent opacity={0.85} side={THREE.DoubleSide} />
+          <ThemedSurfaceMaterial
+            tone="surfaceAlt"
+            opacity={0.85}
+            transparent
+            side={THREE.DoubleSide}
+            accentStrength={0.32}
+          />
         </mesh>
       ) : null}
 
       {towerData.floorGeometries.map((geometry, index) => (
         <mesh key={`floor-${index}`} geometry={geometry}>
-          <meshStandardMaterial color="#f8fafc" transparent opacity={0.92} />
+          <ThemedSurfaceMaterial tone="surface" opacity={0.92} transparent accentStrength={0.2} />
         </mesh>
       ))}
 
@@ -708,7 +744,7 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
           {centralColumnRadius > 0 ? (
             <mesh position={[towerData.centroid.x, ((towerData.floorsCount - 1) * floorHeight - slabThickness) * 0.5, towerData.centroid.z]}>
               <cylinderGeometry args={[centralColumnRadius, centralColumnRadius, (towerData.floorsCount - 1) * floorHeight, 32]} />
-              <meshStandardMaterial color="#cbd5f5" transparent opacity={0.9} />
+              <ThemedSurfaceMaterial tone="accent" opacity={0.9} transparent accentStrength={0.34} />
             </mesh>
           ) : null}
           {columnCount > 0 && columnRadius > 0 && (centralColumnRadius + columnRingOffset) > 0 ? (
@@ -720,7 +756,7 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
               return (
                 <mesh key={`column-${idx}`} position={[x, ((towerData.floorsCount - 1) * floorHeight - slabThickness) * 0.5, z]}>
                   <cylinderGeometry args={[columnRadius, columnRadius, (towerData.floorsCount - 1) * floorHeight, 20]} />
-                  <meshStandardMaterial color="#e2e8f0" transparent opacity={0.9} />
+                  <ThemedSurfaceMaterial tone="surface" opacity={0.9} transparent accentStrength={0.24} />
                 </mesh>
               );
             })
@@ -733,7 +769,7 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
           const isDragging = dragIndex === index;
           const isHovered = hoverIndex === index;
           const radius = isDragging ? 0.35 : isHovered ? 0.3 : 0.2;
-          const color = isDragging ? '#38bdf8' : isHovered ? '#fbbf24' : '#94a3b8';
+          const color = isDragging ? theme.accent2 : isHovered ? theme.accent : theme.muted;
 
           return (
         <mesh
@@ -755,7 +791,7 @@ export function ModelSketchRenderer({ params }: ModelSketchRendererProps) {
           }}
         >
           <sphereGeometry args={[radius, 16, 16]} />
-          <meshStandardMaterial color={mode === 'edit' ? color : '#94a3b8'} />
+          <meshStandardMaterial color={mode === 'edit' ? color : theme.muted} />
         </mesh>
           );
         })()

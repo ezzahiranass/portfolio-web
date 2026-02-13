@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
+import ThemedSurfaceMaterial from '../../../ThemedSurfaceMaterial';
+import { useConfiguratorThemePalette } from '../../../theme';
 
 /*
 Arch profile (2D) + extrusion
@@ -26,9 +28,7 @@ type ArchProps = {
   rotationY: number;
 };
 
-const ARCH_COLOR = '#3f3f3f';
-const OUTLINE_COLOR = 0xcfcfcf;
-const OUTLINE_OPACITY = 0.5;
+const OUTLINE_OPACITY = 0.2;
 const OUTLINE_THRESHOLD = 30;
 
 export default function Arch({
@@ -40,6 +40,7 @@ export default function Arch({
   thickness,
   rotationY,
 }: ArchProps) {
+  const theme = useConfiguratorThemePalette();
   const geometry = useMemo(() => {
     const offset = Math.max(width * 0.2, 0.05);
     const innerWidth = Math.max(width - offset * 2, 0.1);
@@ -83,9 +84,9 @@ export default function Arch({
   return (
     <group position={[0, y, 0]} rotation={[0, rotationY, 0]}>
       <mesh castShadow position={[x, 0, z]} geometry={geometry}>
-        <meshStandardMaterial color={ARCH_COLOR} />
+        <ThemedSurfaceMaterial tone="surfaceDark" />
         <lineSegments geometry={edges}>
-          <lineBasicMaterial color={OUTLINE_COLOR} transparent opacity={OUTLINE_OPACITY} />
+          <lineBasicMaterial color={theme.lineSoft} transparent opacity={OUTLINE_OPACITY} />
         </lineSegments>
       </mesh>
     </group>

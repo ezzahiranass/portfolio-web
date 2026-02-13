@@ -5,6 +5,7 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import type { ParamValues } from '../../types';
 import { assetPath } from '@/app/lib/assetPath';
+import { useConfiguratorThemePalette } from '../../theme';
 import Roof from './parts/roof';
 import Floor from './parts/floor';
 import GroundFloor from './parts/groundFloor';
@@ -76,12 +77,14 @@ function GroundAsset({
   localRotationY = 0,
   localScale,
 }: GroundAssetProps) {
+  const theme = useConfiguratorThemePalette();
   const { scene } = useGLTF(src);
   const cloned = useMemo(() => scene.clone(true), [scene]);
-  const materialColor = useMemo(
-    () => (materialTone === 'black' ? new THREE.Color('#111111') : null),
-    [materialTone]
-  );
+  const materialColor = useMemo(() => {
+    const color = materialTone === 'black' ? theme.surfaceDark : theme.surface;
+    return new THREE.Color(color);
+  }, [materialTone, theme.surface, theme.surfaceDark]);
+  const wireColor = useMemo(() => new THREE.Color(theme.lineSoft), [theme.lineSoft]);
   const localCenter = useMemo(() => {
     const box = new THREE.Box3().setFromObject(cloned);
     const center = new THREE.Vector3();
@@ -95,7 +98,7 @@ function GroundAsset({
       const material = child.material;
       if (Array.isArray(material)) {
         material.forEach((mat) => {
-          if (materialColor && 'color' in mat) {
+          if ('color' in mat) {
             (mat as THREE.MeshStandardMaterial).color.copy(materialColor);
             (mat as THREE.MeshStandardMaterial).roughness = 0.7;
             (mat as THREE.MeshStandardMaterial).metalness = 0.05;
@@ -105,7 +108,7 @@ function GroundAsset({
           mat.polygonOffsetUnits = 1;
         });
       } else if (material) {
-        if (materialColor && 'color' in material) {
+        if ('color' in material) {
           (material as THREE.MeshStandardMaterial).color.copy(materialColor);
           (material as THREE.MeshStandardMaterial).roughness = 0.7;
           (material as THREE.MeshStandardMaterial).metalness = 0.05;
@@ -118,9 +121,9 @@ function GroundAsset({
       if (child.geometry) {
         const wireGeom = new THREE.EdgesGeometry(child.geometry, 50);
         const wireMat = new THREE.LineBasicMaterial({
-          color: 0xcfcfcf,
+          color: wireColor,
           transparent: true,
-          opacity: 0.25,
+          opacity: 0.14,
         });
         const wireframe = new THREE.LineSegments(wireGeom, wireMat);
         wireframe.name = '__wireframe_overlay';
@@ -146,7 +149,7 @@ function GroundAsset({
           });
       });
     };
-  }, [cloned]);
+  }, [cloned, materialColor, wireColor]);
 
   if (rotateInPlace) {
     const centerOffset = new THREE.Vector3(-localCenter.x, 0, -localCenter.z);
@@ -179,6 +182,7 @@ function HumanModel({
   rotationY,
   scale = 1,
 }: HumanModelProps) {
+  const theme = useConfiguratorThemePalette();
   const { scene } = useGLTF(src);
   const cloned = useMemo(() => scene.clone(true), [scene]);
 
@@ -188,7 +192,7 @@ function HumanModel({
         child.castShadow = true;
         child.receiveShadow = true;
         const replacement = new THREE.MeshStandardMaterial({
-          color: '#ffffff',
+          color: theme.text,
           roughness: 0.7,
           metalness: 0.0,
         });
@@ -200,7 +204,7 @@ function HumanModel({
         child.material = replacement;
       }
     });
-  }, [cloned]);
+  }, [cloned, theme.text]);
 
   return (
     <group position={[0, position[1], 0]} rotation={[0, rotationY, 0]} scale={scale}>
@@ -212,10 +216,17 @@ function HumanModel({
 }
 
 export function ModelCRenderer({ params }: { params: ParamValues }) {
+  const theme = useConfiguratorThemePalette();
   const typed = params as Params;
   const { scene } = useGLTF(assetPath('/assets/city_rabat.glb'));
-  const defaultMaterialColor = new THREE.Color('#3f3f3f');
-  const wireframeColor = 0x333333;
+  const defaultMaterialColor = useMemo(
+    () => new THREE.Color(theme.surfaceDark),
+    [theme.surfaceDark]
+  );
+  const wireframeColor = useMemo(
+    () => new THREE.Color(theme.gridMinor),
+    [theme.gridMinor]
+  );
   const rotationY = (typed.rotationY * Math.PI) / 180;
   const sizeX = 17.5;
   const slabCount = typed.floors + 1;
@@ -411,6 +422,8 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
         }
         colored.transparent = true;
         colored.opacity = 0.5;
+        colored.roughness = 0.78;
+        colored.metalness = 0.04;
         colored.depthWrite = false;
       };
       if (Array.isArray(material)) {
@@ -431,6 +444,8 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
         const wireGeom = new THREE.EdgesGeometry(child.geometry, 30);
         const wireMat = new THREE.LineBasicMaterial({
           color: wireframeColor,
+          transparent: true,
+          opacity: 0.16,
           polygonOffset: true,
           polygonOffsetFactor: 2,
           polygonOffsetUnits: 4,
@@ -462,7 +477,7 @@ export function ModelCRenderer({ params }: { params: ParamValues }) {
       });
       scene.remove(overlayGroup);
     };
-  }, [scene]);
+  }, [scene, defaultMaterialColor, wireframeColor]);
 
   return (
     <>

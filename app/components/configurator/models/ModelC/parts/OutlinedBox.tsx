@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
+import ThemedSurfaceMaterial from '../../../ThemedSurfaceMaterial';
+import { useConfiguratorThemePalette } from '../../../theme';
 
 type OutlinedBoxProps = {
   width: number;
@@ -10,11 +12,11 @@ type OutlinedBoxProps = {
   position?: [number, number, number];
   rotation?: [number, number, number];
   castShadow?: boolean;
+  tone?: 'surface' | 'surfaceAlt' | 'surfaceDark' | 'accent' | 'accent2' | 'muted' | 'glass';
+  opacity?: number;
 };
 
-const BOX_COLOR = '#3f3f3f';
-const OUTLINE_COLOR = 0xcfcfcf;
-const OUTLINE_OPACITY = 0.5;
+const OUTLINE_OPACITY = 0.2;
 const OUTLINE_THRESHOLD = 30;
 
 export default function OutlinedBox({
@@ -24,7 +26,10 @@ export default function OutlinedBox({
   position = [0, 0, 0],
   rotation = [0, 0, 0],
   castShadow = true,
+  tone = 'surface',
+  opacity = 1,
 }: OutlinedBoxProps) {
+  const theme = useConfiguratorThemePalette();
   const edges = useMemo(() => {
     const box = new THREE.BoxGeometry(width, height, length);
     const wire = new THREE.EdgesGeometry(box, OUTLINE_THRESHOLD);
@@ -37,9 +42,9 @@ export default function OutlinedBox({
   return (
     <mesh castShadow={castShadow} position={position} rotation={rotation}>
       <boxGeometry args={[width, height, length]} />
-      <meshStandardMaterial color={BOX_COLOR} />
+      <ThemedSurfaceMaterial tone={tone} opacity={opacity} transparent={opacity < 1} />
       <lineSegments geometry={edges}>
-        <lineBasicMaterial color={OUTLINE_COLOR} transparent opacity={OUTLINE_OPACITY} />
+        <lineBasicMaterial color={theme.lineSoft} transparent opacity={OUTLINE_OPACITY} />
       </lineSegments>
     </mesh>
   );
