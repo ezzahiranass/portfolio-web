@@ -9,6 +9,7 @@ export default function Hero() {
       <ParticleGrid className="hero-shell">
         <div className="hero-overlay-grid" aria-hidden="true" />
         <div className="container hero-grid">
+        <HeroCubeViewer />
           <div className="hero-content">
             <span className="eyebrow mono">PORTFOLIO</span>
             <h1 className="hero-title">
@@ -26,7 +27,6 @@ export default function Hero() {
               </button>
             </div>
           </div>
-          <HeroCubeViewer />
         </div>
       </ParticleGrid>
     </section>
